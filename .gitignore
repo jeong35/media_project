@@ -1,0 +1,25 @@
+# Godot
+.godot/
+.import/
+
+# .NET
+**/bin/
+**/obj/
+.vs/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+
+# Runtime database
+*.db
+*.db-shm
+*.db-wal
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+
