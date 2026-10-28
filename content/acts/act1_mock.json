@@ -1,0 +1,33 @@
+{
+  "timeLabel": "멸망 3년 전",
+  "initialState": { "military": 20, "treasury": 30, "legitimacy": 25, "ward": 10 },
+  "scene": {
+    "backgroundId": "study_night",
+    "npcId": "steward_edwin",
+    "npcName": "에드윈",
+    "npcEmotion": "neutral",
+    "narration": "눈을 뜬 순간, 3년 뒤 붉게 갈라질 북부의 하늘이 떠올랐다. 빚 문서가 쌓인 집무실에서 집사 에드윈이 마지막 보고를 기다린다.",
+    "openingDialogue": "남은 자금으로는 기사단과 봉화 중 하나만 복구할 수 있습니다. 무엇을 먼저 지키시겠습니까?"
+  },
+  "mockDialogue": {
+    "dialogue": "주민을 먼저 생각하시는군요. 말씀하신 뜻을 반영해 세 가지 복구안을 준비하겠습니다.",
+    "emotion": "surprised",
+    "feedback": "에드윈의 굳은 표정이 조금 누그러졌다.",
+    "acceptedTags": ["kind", "pragmatic"],
+    "careerFeedback": "사람을 먼저 살리는 지휘 방식이 드러났다.",
+    "summary": "영주는 제한된 자원 속에서도 주민의 안전을 우선해 달라고 요청했다."
+  },
+  "choices": [
+    { "choiceId": "rebuild_knights", "label": "A. 기사단을 재건한다.", "resultNarration": "흩어진 기사들이 다시 성문 앞에 모였다.", "feedback": "영지의 물리적 방어가 강화됐지만 남은 자금은 크게 줄었다.", "changes": { "military": 20, "treasury": -10 }, "affinityChanges": { "martial": 8, "leadership": 3 }, "flags": ["knights_rebuilt"] },
+    { "choiceId": "repair_beacon", "label": "B. 봉화를 수리한다.", "resultNarration": "오랫동안 꺼져 있던 북부 봉화에 희미한 푸른빛이 돌아왔다.", "feedback": "균열을 막을 준비가 진전됐지만 수리 비용이 필요했다.", "changes": { "ward": 20, "treasury": -10 }, "affinityChanges": { "arcane": 8, "leadership": 3 }, "flags": ["beacon_repaired"] },
+    { "choiceId": "prepare_evacuation", "label": "C. 주민 대피로를 정비한다.", "resultNarration": "막혀 있던 산길이 열리고 주민들은 처음으로 대피 훈련을 시작했다.", "feedback": "주민들은 영주가 성보다 사람을 먼저 지켰다는 사실을 기억했다.", "changes": { "legitimacy": 20, "treasury": -5 }, "affinityChanges": { "leadership": 8, "diplomacy": 3 }, "flags": ["evacuation_prepared"] }
+  ],
+  "ending": {
+    "occupationName": "사람을 먼저 살린 견습 영주",
+    "title": "멸망의 예고 앞에서 첫 명령을 내린 자",
+    "territoryOutcome": "첫 번째 대비를 마친 영지",
+    "records": ["에드윈에게 주민의 안전을 먼저 이야기했다.", "제한된 자원으로 첫 복구 방침을 결정했다."],
+    "traits": ["다정함", "실리", "지도력"],
+    "shareLine": "영지를 구한 첫날, 그는 성보다 사람의 이름을 먼저 불렀다."
+  }
+}

@@ -19,61 +19,152 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.055, 0.067, 0.09, 1)
-mouse_filter = 2
 
-[node name="Center" type="CenterContainer" parent="."]
+[node name="Page" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/margin_left = 80
+theme_override_constants/margin_top = 48
+theme_override_constants/margin_right = 80
+theme_override_constants/margin_bottom = 48
 
-[node name="Panel" type="PanelContainer" parent="Center"]
-custom_minimum_size = Vector2(620, 300)
+[node name="TitleScreen" type="VBoxContainer" parent="Page"]
 layout_mode = 2
-
-[node name="Margin" type="MarginContainer" parent="Center/Panel"]
-layout_mode = 2
-theme_override_constants/margin_left = 42
-theme_override_constants/margin_top = 36
-theme_override_constants/margin_right = 42
-theme_override_constants/margin_bottom = 36
-
-[node name="Content" type="VBoxContainer" parent="Center/Panel/Margin"]
-layout_mode = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 24
 alignment = 1
 
-[node name="Title" type="Label" parent="Center/Panel/Margin/Content"]
+[node name="Title" type="Label" parent="Page/TitleScreen"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 30
+theme_override_font_sizes/font_size = 36
 text = "빙의했더니 영지 멸망 3년 전"
 horizontal_alignment = 1
 
-[node name="Subtitle" type="Label" parent="Center/Panel/Margin/Content"]
+[node name="Description" type="Label" parent="Page/TitleScreen"]
 layout_mode = 2
-text = "개발 1단계 · Godot ↔ ASP.NET Core 연결 확인"
+text = "3년 뒤 멸망할 북부 영지에서, 첫 번째 결정을 내리세요."
 horizontal_alignment = 1
 
-[node name="Status" type="Label" parent="Center/Panel/Margin/Content"]
+[node name="NewGameButton" type="Button" parent="Page/TitleScreen"]
+custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "서버 연결 확인 중…"
+text = "새 게임"
+
+[node name="ConnectionStatus" type="Label" parent="Page/TitleScreen"]
+layout_mode = 2
+text = "Mock 모드 · 로컬 서버 필요"
+horizontal_alignment = 1
+
+[node name="GameScreen" type="VBoxContainer" parent="Page"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="ActLabel" type="Label" parent="Page/GameScreen"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "ACT 1 · 멸망 3년 전"
+
+[node name="Narration" type="Label" parent="Page/GameScreen"]
+layout_mode = 2
+text = "내레이션"
+autowrap_mode = 2
+
+[node name="NpcName" type="Label" parent="Page/GameScreen"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "에드윈"
+
+[node name="NpcDialogue" type="Label" parent="Page/GameScreen"]
+custom_minimum_size = Vector2(0, 84)
+layout_mode = 2
+text = "대사"
+autowrap_mode = 2
+
+[node name="PlayerInput" type="TextEdit" parent="Page/GameScreen"]
+custom_minimum_size = Vector2(0, 76)
+layout_mode = 2
+placeholder_text = "에드윈에게 답하세요. (최대 300자)"
+wrap_mode = 1
+
+[node name="SendButton" type="Button" parent="Page/GameScreen"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "대답하기"
+
+[node name="Feedback" type="Label" parent="Page/GameScreen"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.78, 0.68, 1)
+text = ""
+autowrap_mode = 2
+
+[node name="Choices" type="VBoxContainer" parent="Page/GameScreen"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Choice0" type="Button" parent="Page/GameScreen/Choices"]
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+
+[node name="Choice1" type="Button" parent="Page/GameScreen/Choices"]
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+
+[node name="Choice2" type="Button" parent="Page/GameScreen/Choices"]
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+
+[node name="EndingScreen" type="VBoxContainer" parent="Page"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 18
+alignment = 1
+
+[node name="Header" type="Label" parent="Page/EndingScreen"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "임시 직업 엔딩"
+horizontal_alignment = 1
+
+[node name="Occupation" type="Label" parent="Page/EndingScreen"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "직업명"
+horizontal_alignment = 1
+
+[node name="EndingTitle" type="Label" parent="Page/EndingScreen"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "칭호"
+horizontal_alignment = 1
+
+[node name="Outcome" type="Label" parent="Page/EndingScreen"]
+layout_mode = 2
+text = "영지 결과"
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="RetryButton" type="Button" parent="Center/Panel/Margin/Content"]
-custom_minimum_size = Vector2(0, 52)
+[node name="Records" type="Label" parent="Page/EndingScreen"]
 layout_mode = 2
-text = "다시 확인"
-
-[node name="Endpoint" type="Label" parent="Center/Panel/Margin/Content"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.62, 0.66, 0.74, 1)
-text = "GET http://127.0.0.1:5050/health"
+text = "결정적 기록"
 horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="ShareLine" type="Label" parent="Page/EndingScreen"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.84, 0.72, 0.42, 1)
+text = "공유 문구"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="RestartButton" type="Button" parent="Page/EndingScreen"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+text = "다시 시작"
 
 [node name="HealthRequest" type="HTTPRequest" parent="."]
-timeout = 5.0
-
+timeout = 8.0

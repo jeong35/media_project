@@ -1,13 +1,48 @@
+using Game.Api.Contracts;
+using Game.Api.Data;
+using Game.Api.Errors;
+using Game.Api.Services;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddDbContext<GameDbContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("GameDb") ?? "Data Source=game.db"));
+builder.Services.AddSingleton(MockContentLoader.Load());
+builder.Services.AddScoped<MockGameService>();
 
 var app = builder.Build();
+app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+{
+    var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+    var (status, code, message, retryable) = exception switch
+    {
+        GameRuleException error => (400, error.Code, error.Message, false),
+        SessionNotFoundException => (404, "SESSION_NOT_FOUND", "세션을 찾을 수 없습니다.", false),
+        _ => (500, "INTERNAL_ERROR", "요청을 처리하지 못했습니다.", true)
+    };
+    context.Response.StatusCode = status;
+    await context.Response.WriteAsJsonAsync(new ErrorEnvelope(
+        new ErrorResponse(code, message, retryable, context.TraceIdentifier)));
+}));
 
-app.MapGet("/health", () => Results.Ok(new HealthResponse(
-    Status: "ok",
-    Service: "game-api",
-    Version: "0.1.0")));
+using (var scope = app.Services.CreateScope())
+{
+    scope.ServiceProvider.GetRequiredService<GameDbContext>().Database.EnsureCreated();
+}
+
+app.MapGet("/health", async (GameDbContext database) => Results.Ok(new HealthResponse(
+    "ok", "game-api", "0.2.0", await database.Database.CanConnectAsync())));
+app.MapPost("/api/v1/sessions", async (SessionStartRequest request, MockGameService game) =>
+    Results.Ok(await game.StartSessionAsync(request.Mode)));
+app.MapGet("/api/v1/sessions/{sessionId:guid}", async (Guid sessionId, MockGameService game) =>
+    Results.Ok(await game.GetSessionAsync(sessionId)));
+app.MapPost("/api/v1/sessions/{sessionId:guid}/dialogues", async (Guid sessionId, DialogueRequest request, MockGameService game) =>
+    Results.Ok(await game.SubmitDialogueAsync(sessionId, request)));
+app.MapGet("/api/v1/sessions/{sessionId:guid}/choices", async (Guid sessionId, MockGameService game) =>
+    Results.Ok(await game.GetChoicesAsync(sessionId)));
+app.MapPost("/api/v1/sessions/{sessionId:guid}/choices", async (Guid sessionId, ChoiceRequest request, MockGameService game) =>
+    Results.Ok(await game.SubmitChoiceAsync(sessionId, request)));
 
 app.Run();
-
-public sealed record HealthResponse(string Status, string Service, string Version);
-
+public partial class Program;
