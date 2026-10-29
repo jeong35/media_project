@@ -29,6 +29,8 @@ const API_BASE := "http://127.0.0.1:5050"
 @onready var http_request: HTTPRequest = $HealthRequest
 
 var session_id := ""
+var current_act := 1
+var current_npc_id := ""
 var request_kind := ""
 var choice_ids: Array[String] = []
 var smoke_test := false
@@ -52,6 +54,8 @@ func _start_new_game() -> void:
 	choice_ids.clear()
 	feedback.text = ""
 	player_input.text = ""
+	player_input.show()
+	send_button.show()
 	choices.hide()
 	title_screen.show()
 	game_screen.hide()
@@ -68,9 +72,9 @@ func _submit_dialogue() -> void:
 		return
 	send_button.disabled = true
 	player_input.editable = false
-	feedback.text = "에드윈이 답을 준비하고 있습니다…"
+	feedback.text = "답변을 준비하고 있습니다…"
 	_request_json("dialogue", HTTPClient.METHOD_POST, "/api/v1/sessions/%s/dialogues" % session_id, {
-		"npcId": "steward_edwin",
+		"npcId": current_npc_id,
 		"text": text,
 		"idempotencyKey": _new_uuid()
 	})
@@ -118,16 +122,27 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		"start": _show_session(payload)
 		"dialogue": _show_dialogue(payload)
 		"choices": _show_choices(payload)
-		"choice": _show_ending(payload)
+		"choice": _show_choice_result(payload)
 
 
 func _show_session(payload: Dictionary) -> void:
 	session_id = str(payload.get("sessionId", ""))
+	_show_act(payload)
+
+
+func _show_act(payload: Dictionary, transition_feedback := "") -> void:
+	current_act = int(payload.get("act", 1))
 	var scene: Dictionary = payload.get("scene", {})
-	act_label.text = "ACT %s · %s" % [payload.get("act", 1), payload.get("timeLabel", "")]
+	current_npc_id = str(scene.get("npcId", ""))
+	act_label.text = "ACT %s · %s" % [current_act, payload.get("timeLabel", "")]
 	narration.text = scene.get("narration", "")
-	npc_name.text = scene.get("npcName", "에드윈")
+	npc_name.text = scene.get("npcName", "")
 	npc_dialogue.text = payload.get("openingDialogue", "")
+	feedback.text = transition_feedback
+	player_input.text = ""
+	player_input.show()
+	send_button.show()
+	choices.hide()
 	title_screen.hide()
 	ending_screen.hide()
 	game_screen.show()
@@ -135,7 +150,7 @@ func _show_session(payload: Dictionary) -> void:
 	send_button.disabled = false
 	new_game_button.disabled = false
 	if smoke_test:
-		player_input.text = "주민들이 다치지 않는 방법부터 찾아보자."
+		player_input.text = "주민들이 다치지 않는 방법부터 찾아보자." if current_act == 1 else "징후를 먼저 계산하고 실행할 수 있는 계획을 세우자."
 		_submit_dialogue()
 
 
@@ -159,7 +174,16 @@ func _show_choices(payload: Dictionary) -> void:
 			choice_buttons[index].text = choice.get("label", "")
 	choices.show()
 	if smoke_test:
-		_submit_choice(2)
+		_submit_choice(2 if current_act == 1 else 1)
+
+
+func _show_choice_result(payload: Dictionary) -> void:
+	var next_act: Variant = payload.get("nextAct")
+	if next_act is Dictionary:
+		var transition_feedback := "%s\n%s" % [payload.get("resultNarration", ""), payload.get("feedback", "")]
+		_show_act(next_act, transition_feedback)
+		return
+	_show_ending(payload)
 
 
 func _show_ending(payload: Dictionary) -> void:

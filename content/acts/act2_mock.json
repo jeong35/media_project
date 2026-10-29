@@ -1,0 +1,60 @@
+{
+  "act": 2,
+  "timeLabel": "멸망 2년 8개월 전",
+  "scene": {
+    "backgroundId": "north_beacon_ruins",
+    "npcId": "mage_lia",
+    "npcName": "리아",
+    "npcEmotion": "nervous",
+    "narration": "첫 복구 명령이 내려진 뒤, 북부 봉화탑의 균열 감지석이 희미하게 울렸다. 견습 마법사 리아는 깨진 석판을 안고 영주를 기다린다.",
+    "openingDialogue": "감지석이 반응했어요. 군사 훈련, 봉인 연구, 외부 지원을 모두 준비할 시간은 없습니다. 무엇을 중심으로 계획할까요?"
+  },
+  "mockDialogue": {
+    "dialogue": "실패할까 두렵지만, 영주님이 방향을 정해 주신다면 끝까지 계산해 보겠습니다. 세 가지 계획을 정리했어요.",
+    "emotion": "determined",
+    "feedback": "리아는 불안한 손을 멈추고 균열 지도를 펼쳤다.",
+    "acceptedTags": ["observant", "pragmatic"],
+    "careerFeedback": "불확실한 징후를 계획으로 바꾸는 판단력이 드러났다.",
+    "summary": "영주는 리아의 균열 감지 결과를 듣고 실행 가능한 대응 계획을 요청했다."
+  },
+  "choices": [
+    {
+      "choiceId": "train_defenders",
+      "label": "A. 기사단 재건과 주민 대피 훈련을 병행한다.",
+      "resultNarration": "성벽 아래에서 기사와 주민이 함께 비상 동선을 익히기 시작했다.",
+      "feedback": "직접 방어와 대피 역량이 강화됐지만 훈련 비용이 들었다.",
+      "changes": { "military": 15, "treasury": -10, "legitimacy": 5 },
+      "affinityChanges": { "martial": 8, "leadership": 5 },
+      "flags": ["defense_plan_selected"]
+    },
+    {
+      "choiceId": "research_ward",
+      "label": "B. 봉화 수리와 균열 봉인 연구에 투자한다.",
+      "resultNarration": "리아의 작업대에 꺼진 봉화석과 균열 계산식이 밤새 쌓였다.",
+      "feedback": "봉인 준비가 크게 진전됐지만 연구 재료에 자금이 필요했다.",
+      "changes": { "ward": 25, "treasury": -10 },
+      "affinityChanges": { "arcane": 10, "craft": 3 },
+      "flags": ["ward_plan_selected"]
+    },
+    {
+      "choiceId": "seek_allies",
+      "label": "C. 왕국과 상단에 외부 지원을 요청한다.",
+      "resultNarration": "왕도와 북부 상단으로 영지의 인장이 찍힌 지원 요청서가 출발했다.",
+      "feedback": "협상 비용이 들었지만 영지 밖의 지원 가능성과 주민의 기대가 커졌다.",
+      "changes": { "treasury": -5, "legitimacy": 10 },
+      "affinityChanges": { "diplomacy": 10, "commerce": 4 },
+      "flags": ["alliance_plan_selected"]
+    }
+  ],
+  "ending": {
+    "occupationName": "멸망을 계산한 견습 영주",
+    "title": "균열 앞에서 두 번째 계획을 세운 자",
+    "territoryOutcome": "주력 대응책을 정한 북부 영지",
+    "records": [
+      "에드윈과 첫 복구 방침을 결정했다.",
+      "리아와 균열 대응의 주력 전략을 선택했다."
+    ],
+    "traits": ["관찰", "실리", "지도력"],
+    "shareLine": "멸망은 아직 오지 않았지만, 영지는 처음으로 그날을 계산하기 시작했다."
+  }
+}

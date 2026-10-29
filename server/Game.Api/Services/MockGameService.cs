@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Game.Api.Services;
 
-public sealed class MockGameService(GameDbContext database, MockSliceContent content)
+public sealed class MockGameService(GameDbContext database, MockGameContent content)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] TraitIds = ["kind", "ruthless", "persuasive", "observant", "pragmatic", "reckless", "eccentric", "threatening"];
@@ -17,6 +17,7 @@ public sealed class MockGameService(GameDbContext database, MockSliceContent con
         if (!string.Equals(mode, "mock", StringComparison.OrdinalIgnoreCase))
             throw new GameRuleException("UNSUPPORTED_MODE", "현재 세로 슬라이스는 Mock 모드만 지원합니다.");
 
+        var act = content.GetAct(1);
         var now = DateTimeOffset.UtcNow;
         var session = new GameSession
         {
@@ -25,15 +26,14 @@ public sealed class MockGameService(GameDbContext database, MockSliceContent con
             Legitimacy = content.InitialState.Legitimacy, Ward = content.InitialState.Ward
         };
         database.Sessions.Add(session);
-        database.NpcStates.Add(new NpcState { SessionId = session.Id, NpcId = content.Scene.NpcId, Trust = 20 });
+        database.NpcStates.Add(new NpcState { SessionId = session.Id, NpcId = act.Scene.NpcId, Trust = 20 });
         database.TraitScores.AddRange(TraitIds.Select(id => new TraitScore { SessionId = session.Id, TraitId = id }));
         database.CareerAffinities.AddRange(AffinityIds.Select(id => new CareerAffinity { SessionId = session.Id, AffinityId = id }));
         database.GameEvents.Add(CreateEvent(session.Id, 1, "SessionStarted", new { mode = "Mock" }));
         await database.SaveChangesAsync();
 
-        return new SessionStartResponse(session.Id, 1, content.TimeLabel,
-            new SceneResponse(content.Scene.BackgroundId, content.Scene.NpcId, content.Scene.NpcName, content.Scene.NpcEmotion, content.Scene.Narration),
-            content.Scene.OpeningDialogue, 1);
+        return new SessionStartResponse(session.Id, 1, act.TimeLabel,
+            ToSceneResponse(act.Scene), act.Scene.OpeningDialogue, 1);
     }
 
     public async Task<SessionSnapshotResponse> GetSessionAsync(Guid sessionId)
@@ -50,21 +50,25 @@ public sealed class MockGameService(GameDbContext database, MockSliceContent con
         if (duplicate is not null) return duplicate;
 
         var session = await FindSessionAsync(sessionId);
+        var act = content.GetAct(session.CurrentAct);
         if (session.Phase != "AwaitingDialogue") throw new GameRuleException("INVALID_TURN", "현재는 자유 대화를 제출할 수 없습니다.");
-        if (request.NpcId != content.Scene.NpcId) throw new GameRuleException("INVALID_NPC", "현재 장면의 NPC와 일치하지 않습니다.");
+        if (request.NpcId != act.Scene.NpcId) throw new GameRuleException("INVALID_NPC", "현재 장면의 NPC와 일치하지 않습니다.");
         if (string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 300) throw new GameRuleException("INVALID_TEXT", "대화는 1자 이상 300자 이하로 입력해 주세요.");
 
-        var response = new DialogueResponse(content.MockDialogue.Dialogue, content.MockDialogue.Emotion, content.MockDialogue.Feedback,
-            content.MockDialogue.AcceptedTags, content.MockDialogue.CareerFeedback, 0, true);
-        var npc = await database.NpcStates.SingleAsync(state => state.SessionId == sessionId && state.NpcId == content.Scene.NpcId);
+        var response = new DialogueResponse(act.MockDialogue.Dialogue, act.MockDialogue.Emotion, act.MockDialogue.Feedback,
+            act.MockDialogue.AcceptedTags, act.MockDialogue.CareerFeedback, 0, true);
+        var npc = await database.NpcStates.SingleAsync(state => state.SessionId == sessionId && state.NpcId == act.Scene.NpcId);
         npc.Trust = Math.Clamp(npc.Trust + 2, 0, 100);
-        npc.ConversationSummary = content.MockDialogue.Summary;
-        var kind = await database.TraitScores.SingleAsync(score => score.SessionId == sessionId && score.TraitId == "kind");
-        kind.Score = Math.Clamp(kind.Score + 1, 0, 10);
-        session.CurrentTurn = 1;
+        npc.ConversationSummary = act.MockDialogue.Summary;
+        foreach (var tag in act.MockDialogue.AcceptedTags.Where(TraitIds.Contains))
+        {
+            var trait = await database.TraitScores.SingleAsync(score => score.SessionId == sessionId && score.TraitId == tag);
+            trait.Score = Math.Clamp(trait.Score + 1, 0, 10);
+        }
+        session.CurrentTurn += 1;
         session.Phase = "AwaitingChoice";
         session.UpdatedAt = DateTimeOffset.UtcNow;
-        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "DialogueGenerated", response, request.IdempotencyKey));
+        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "DialogueGenerated", session.CurrentAct, response, request.IdempotencyKey));
         await database.SaveChangesAsync();
         return response;
     }
@@ -73,7 +77,8 @@ public sealed class MockGameService(GameDbContext database, MockSliceContent con
     {
         var session = await FindSessionAsync(sessionId);
         if (session.Phase != "AwaitingChoice") throw new GameRuleException("CHOICES_UNAVAILABLE", "아직 선택지를 확인할 수 없습니다.");
-        return new ChoicesResponse(content.Choices.Select(choice => new ChoiceOptionResponse(choice.ChoiceId, choice.Label)).ToArray());
+        var act = content.GetAct(session.CurrentAct);
+        return new ChoicesResponse(act.Choices.Select(choice => new ChoiceOptionResponse(choice.ChoiceId, choice.Label)).ToArray());
     }
 
     public async Task<ChoiceResultResponse> SubmitChoiceAsync(Guid sessionId, ChoiceRequest request)
@@ -83,22 +88,40 @@ public sealed class MockGameService(GameDbContext database, MockSliceContent con
         if (duplicate is not null) return duplicate;
 
         var session = await FindSessionAsync(sessionId);
+        var selectedAct = session.CurrentAct;
+        var act = content.GetAct(session.CurrentAct);
         if (session.Phase != "AwaitingChoice") throw new GameRuleException("INVALID_TURN", "현재는 선택지를 제출할 수 없습니다.");
-        var choice = content.Choices.SingleOrDefault(candidate => candidate.ChoiceId == request.ChoiceId)
+        var choice = act.Choices.SingleOrDefault(candidate => candidate.ChoiceId == request.ChoiceId)
             ?? throw new GameRuleException("INVALID_CHOICE", "허용되지 않은 선택지입니다.");
 
         ApplyStateChanges(session, choice.Changes);
-        await ApplyAffinityChangesAsync(sessionId, choice.AffinityChanges);
-        var ending = new EndingResponse(content.Ending.OccupationName, content.Ending.Title, content.Ending.TerritoryOutcome,
-            [choice.ResultNarration, .. content.Ending.Records.Take(2)], content.Ending.Traits, content.Ending.ShareLine);
-        var response = new ChoiceResultResponse(choice.ResultNarration, choice.Feedback, choice.Changes, ToStateResponse(session), ending);
-        session.Status = "Completed";
-        session.Phase = "Completed";
-        session.CurrentTurn = 2;
+        await ApplyAffinityChangesAsync(sessionId, choice.AffinityChanges, selectedAct);
         session.SelectedChoiceId = choice.ChoiceId;
-        session.EndingJson = JsonSerializer.Serialize(ending, JsonOptions);
         session.UpdatedAt = DateTimeOffset.UtcNow;
-        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "ChoiceSelected", response, request.IdempotencyKey));
+
+        EndingResponse? ending = null;
+        NextActResponse? nextAct = null;
+        if (act.Ending is not null)
+        {
+            ending = new EndingResponse(act.Ending.OccupationName, act.Ending.Title, act.Ending.TerritoryOutcome,
+                [choice.ResultNarration, .. act.Ending.Records.Take(2)], act.Ending.Traits, act.Ending.ShareLine);
+            session.Status = "Completed";
+            session.Phase = "Completed";
+            session.EndingJson = JsonSerializer.Serialize(ending, JsonOptions);
+        }
+        else
+        {
+            var nextContent = content.GetAct(session.CurrentAct + 1);
+            session.CurrentAct = nextContent.Act;
+            session.CurrentTurn = 0;
+            session.Phase = "AwaitingDialogue";
+            if (!await database.NpcStates.AnyAsync(state => state.SessionId == sessionId && state.NpcId == nextContent.Scene.NpcId))
+                database.NpcStates.Add(new NpcState { SessionId = sessionId, NpcId = nextContent.Scene.NpcId, Trust = 20 });
+            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, 1);
+        }
+
+        var response = new ChoiceResultResponse(choice.ResultNarration, choice.Feedback, choice.Changes, ToStateResponse(session), nextAct, ending);
+        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "ChoiceSelected", selectedAct, response, request.IdempotencyKey));
         await database.SaveChangesAsync();
         return response;
     }
@@ -116,9 +139,15 @@ public sealed class MockGameService(GameDbContext database, MockSliceContent con
         return gameEvent is null ? null : JsonSerializer.Deserialize<T>(gameEvent.PayloadJson, JsonOptions);
     }
 
-    private static GameEvent CreateEvent(Guid sessionId, int sequence, string eventType, object payload, string? key = null) => new()
+    private static SceneResponse ToSceneResponse(SceneContent scene) =>
+        new(scene.BackgroundId, scene.NpcId, scene.NpcName, scene.NpcEmotion, scene.Narration);
+
+    private static GameEvent CreateEvent(Guid sessionId, int sequence, string eventType, object payload, string? key = null) =>
+        CreateEvent(sessionId, sequence, eventType, 1, payload, key);
+
+    private static GameEvent CreateEvent(Guid sessionId, int sequence, string eventType, int act, object payload, string? key = null) => new()
     {
-        Id = Guid.NewGuid(), SessionId = sessionId, Sequence = sequence, EventType = eventType, Act = 1,
+        Id = Guid.NewGuid(), SessionId = sessionId, Sequence = sequence, EventType = eventType, Act = act,
         PayloadJson = JsonSerializer.Serialize(payload, JsonOptions), CreatedAt = DateTimeOffset.UtcNow, IdempotencyKey = key
     };
 
@@ -142,13 +171,13 @@ public sealed class MockGameService(GameDbContext database, MockSliceContent con
         }
     }
 
-    private async Task ApplyAffinityChangesAsync(Guid sessionId, IReadOnlyDictionary<string, int> changes)
+    private async Task ApplyAffinityChangesAsync(Guid sessionId, IReadOnlyDictionary<string, int> changes, int act)
     {
         foreach (var (id, amount) in changes)
         {
             var affinity = await database.CareerAffinities.SingleAsync(candidate => candidate.SessionId == sessionId && candidate.AffinityId == id);
             affinity.Score = Math.Clamp(affinity.Score + amount, 0, 100);
-            affinity.LastChangedAct = 1;
+            affinity.LastChangedAct = act;
         }
     }
 
