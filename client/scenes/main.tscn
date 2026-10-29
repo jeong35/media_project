@@ -28,9 +28,9 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/margin_left = 80
-theme_override_constants/margin_top = 48
+theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 80
-theme_override_constants/margin_bottom = 48
+theme_override_constants/margin_bottom = 20
 
 [node name="TitleScreen" type="VBoxContainer" parent="Page"]
 layout_mode = 2
@@ -117,6 +117,143 @@ layout_mode = 2
 [node name="Choice2" type="Button" parent="Page/GameScreen/Choices"]
 custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
+
+[node name="FarmingScreen" type="VBoxContainer" parent="Page"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Page/FarmingScreen"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "마력보리 공동밭"
+horizontal_alignment = 1
+
+[node name="Instructions" type="Label" parent="Page/FarmingScreen"]
+layout_mode = 2
+text = "돌과 잡초를 치우고 씨앗을 배치하세요."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Progress" type="Label" parent="Page/FarmingScreen"]
+layout_mode = 2
+text = "장애물 0/3 · 올바른 씨앗 0/3"
+horizontal_alignment = 1
+
+[node name="ObstacleLabel" type="Label" parent="Page/FarmingScreen"]
+layout_mode = 2
+text = "1. 밭 정리"
+
+[node name="Obstacles" type="GridContainer" parent="Page/FarmingScreen"]
+layout_mode = 2
+columns = 3
+
+[node name="Rock1" type="Button" parent="Page/FarmingScreen/Obstacles"]
+custom_minimum_size = Vector2(180, 40)
+layout_mode = 2
+text = "돌 치우기"
+
+[node name="Weed1" type="Button" parent="Page/FarmingScreen/Obstacles"]
+custom_minimum_size = Vector2(180, 40)
+layout_mode = 2
+text = "잡초 뽑기"
+
+[node name="Rock2" type="Button" parent="Page/FarmingScreen/Obstacles"]
+custom_minimum_size = Vector2(180, 40)
+layout_mode = 2
+text = "큰 돌 치우기"
+
+[node name="SeedLabel" type="Label" parent="Page/FarmingScreen"]
+layout_mode = 2
+text = "2. 씨앗 배치"
+
+[node name="SeedCells" type="GridContainer" parent="Page/FarmingScreen"]
+layout_mode = 2
+columns = 4
+
+[node name="Seed0" type="Button" parent="Page/FarmingScreen/SeedCells"]
+custom_minimum_size = Vector2(135, 40)
+layout_mode = 2
+text = "비옥한 칸 A"
+
+[node name="Seed1" type="Button" parent="Page/FarmingScreen/SeedCells"]
+custom_minimum_size = Vector2(135, 40)
+layout_mode = 2
+text = "비옥한 칸 B"
+
+[node name="Seed2" type="Button" parent="Page/FarmingScreen/SeedCells"]
+custom_minimum_size = Vector2(135, 40)
+layout_mode = 2
+text = "비옥한 칸 C"
+
+[node name="Seed3" type="Button" parent="Page/FarmingScreen/SeedCells"]
+custom_minimum_size = Vector2(135, 40)
+layout_mode = 2
+text = "메마른 칸"
+
+[node name="WaterLabel" type="Label" parent="Page/FarmingScreen"]
+layout_mode = 2
+text = "3. 남은 물 배분"
+
+[node name="WaterChoices" type="HBoxContainer" parent="Page/FarmingScreen"]
+layout_mode = 2
+
+[node name="Community" type="Button" parent="Page/FarmingScreen/WaterChoices"]
+custom_minimum_size = Vector2(180, 44)
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "주민 공동밭"
+
+[node name="Ward" type="Button" parent="Page/FarmingScreen/WaterChoices"]
+custom_minimum_size = Vector2(180, 44)
+layout_mode = 2
+toggle_mode = true
+text = "봉화 연료밭"
+
+[node name="Market" type="Button" parent="Page/FarmingScreen/WaterChoices"]
+custom_minimum_size = Vector2(180, 44)
+layout_mode = 2
+toggle_mode = true
+text = "판매용 밭"
+
+[node name="MethodLabel" type="Label" parent="Page/FarmingScreen"]
+layout_mode = 2
+text = "4. 작업 방식"
+
+[node name="MethodChoices" type="HBoxContainer" parent="Page/FarmingScreen"]
+layout_mode = 2
+
+[node name="Manual" type="Button" parent="Page/FarmingScreen/MethodChoices"]
+custom_minimum_size = Vector2(180, 44)
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "주민과 수작업"
+
+[node name="Magic" type="Button" parent="Page/FarmingScreen/MethodChoices"]
+custom_minimum_size = Vector2(180, 44)
+layout_mode = 2
+toggle_mode = true
+text = "마력 사용"
+
+[node name="Tools" type="Button" parent="Page/FarmingScreen/MethodChoices"]
+custom_minimum_size = Vector2(180, 44)
+layout_mode = 2
+toggle_mode = true
+text = "개량 도구"
+
+[node name="Feedback" type="Label" parent="Page/FarmingScreen"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.78, 0.68, 1)
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="FinishButton" type="Button" parent="Page/FarmingScreen"]
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+text = "농사 결과 확인"
 
 [node name="EndingScreen" type="VBoxContainer" parent="Page"]
 visible = false

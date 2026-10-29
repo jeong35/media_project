@@ -10,11 +10,15 @@ public sealed record MockGameContent(InitialStateContent InitialState, IReadOnly
 }
 
 public sealed record MockActContent(int Act, string TimeLabel, InitialStateContent? InitialState, SceneContent Scene,
-    MockDialogueContent MockDialogue, IReadOnlyList<ChoiceContent> Choices, EndingContent? Ending);
+    MockDialogueContent MockDialogue, IReadOnlyList<ChoiceContent> Choices, string? Activity, FarmingContent? Farming, EndingContent? Ending);
 public sealed record InitialStateContent(int Military, int Treasury, int Legitimacy, int Ward);
 public sealed record SceneContent(string BackgroundId, string NpcId, string NpcName, string NpcEmotion, string Narration, string OpeningDialogue);
 public sealed record MockDialogueContent(string Dialogue, string Emotion, string Feedback, IReadOnlyList<string> AcceptedTags, string CareerFeedback, string Summary);
 public sealed record ChoiceContent(string ChoiceId, string Label, string ResultNarration, string Feedback, IReadOnlyDictionary<string, int> Changes, IReadOnlyDictionary<string, int> AffinityChanges, IReadOnlyList<string> Flags);
+public sealed record FarmingContent(string Title, string Instructions, int ObstaclePoints, int SeedPoints, int CompletionThreshold,
+    IReadOnlyDictionary<string, FarmingOutcomeContent> WaterOutcomes, IReadOnlyDictionary<string, FarmingOutcomeContent> MethodOutcomes,
+    FarmingOutcomeContent CompletionBonus);
+public sealed record FarmingOutcomeContent(string Feedback, IReadOnlyDictionary<string, int> Changes, IReadOnlyDictionary<string, int> AffinityChanges);
 public sealed record EndingContent(string OccupationName, string Title, string TerritoryOutcome, IReadOnlyList<string> Records, IReadOnlyList<string> Traits, string ShareLine);
 
 public static class MockContentLoader

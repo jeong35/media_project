@@ -101,7 +101,13 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
 
         EndingResponse? ending = null;
         NextActResponse? nextAct = null;
-        if (act.Ending is not null)
+        NextActivityResponse? nextActivity = null;
+        if (act.Activity == "farming" && act.Farming is not null)
+        {
+            session.Phase = "AwaitingFarming";
+            nextActivity = new NextActivityResponse("farming", act.Farming.Title, act.Farming.Instructions);
+        }
+        else if (act.Ending is not null)
         {
             ending = new EndingResponse(act.Ending.OccupationName, act.Ending.Title, act.Ending.TerritoryOutcome,
                 [choice.ResultNarration, .. act.Ending.Records.Take(2)], act.Ending.Traits, act.Ending.ShareLine);
@@ -120,8 +126,49 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, 1);
         }
 
-        var response = new ChoiceResultResponse(choice.ResultNarration, choice.Feedback, choice.Changes, ToStateResponse(session), nextAct, ending);
+        var response = new ChoiceResultResponse(choice.ResultNarration, choice.Feedback, choice.Changes, ToStateResponse(session), nextAct, nextActivity, ending);
         database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "ChoiceSelected", selectedAct, response, request.IdempotencyKey));
+        await database.SaveChangesAsync();
+        return response;
+    }
+
+    public async Task<FarmingResultResponse> SubmitFarmingAsync(Guid sessionId, FarmingResultRequest request)
+    {
+        ValidateIdempotencyKey(request.IdempotencyKey);
+        var duplicate = await FindExistingResponseAsync<FarmingResultResponse>(sessionId, request.IdempotencyKey, "FarmingCompleted");
+        if (duplicate is not null) return duplicate;
+
+        var session = await FindSessionAsync(sessionId);
+        var act = content.GetAct(session.CurrentAct);
+        var farming = act.Farming ?? throw new GameRuleException("FARMING_UNAVAILABLE", "현재 장면에는 농사 활동이 없습니다.");
+        if (session.Phase != "AwaitingFarming") throw new GameRuleException("INVALID_TURN", "현재는 농사 결과를 제출할 수 없습니다.");
+        if (request.RemovedObstacles is < 0 or > 3 || request.CorrectSeeds is < 0 or > 3)
+            throw new GameRuleException("INVALID_FARMING_RESULT", "농사 행동 횟수가 허용 범위를 벗어났습니다.");
+        if (!farming.WaterOutcomes.TryGetValue(request.WaterTarget, out var waterOutcome))
+            throw new GameRuleException("INVALID_WATER_TARGET", "허용되지 않은 물 배분 대상입니다.");
+        if (!farming.MethodOutcomes.TryGetValue(request.Method, out var methodOutcome))
+            throw new GameRuleException("INVALID_FARMING_METHOD", "허용되지 않은 작업 방식입니다.");
+
+        var score = request.RemovedObstacles * farming.ObstaclePoints + request.CorrectSeeds * farming.SeedPoints;
+        var changes = MergeChanges(waterOutcome.Changes, methodOutcome.Changes,
+            score >= farming.CompletionThreshold ? farming.CompletionBonus.Changes : EmptyChanges);
+        var affinities = MergeChanges(waterOutcome.AffinityChanges, methodOutcome.AffinityChanges,
+            score >= farming.CompletionThreshold ? farming.CompletionBonus.AffinityChanges : EmptyChanges);
+        ApplyStateChanges(session, changes);
+        await ApplyAffinityChangesAsync(sessionId, affinities, session.CurrentAct);
+
+        var endingContent = act.Ending ?? throw new InvalidOperationException("Act 3 temporary ending content was not found.");
+        var ending = new EndingResponse(endingContent.OccupationName, endingContent.Title, endingContent.TerritoryOutcome,
+            [$"농사 점수 {score}점으로 마력보리밭을 완성했다.", .. endingContent.Records.Take(2)], endingContent.Traits, endingContent.ShareLine);
+        var feedbackParts = new List<string> { waterOutcome.Feedback, methodOutcome.Feedback };
+        if (score >= farming.CompletionThreshold) feedbackParts.Add(farming.CompletionBonus.Feedback);
+        var response = new FarmingResultResponse(score, string.Join(" ", feedbackParts), changes, ToStateResponse(session), ending);
+
+        session.Status = "Completed";
+        session.Phase = "Completed";
+        session.EndingJson = JsonSerializer.Serialize(ending, JsonOptions);
+        session.UpdatedAt = DateTimeOffset.UtcNow;
+        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "FarmingCompleted", session.CurrentAct, response, request.IdempotencyKey));
         await database.SaveChangesAsync();
         return response;
     }
@@ -169,6 +216,17 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
                 default: throw new InvalidOperationException($"Unknown state change: {state}");
             }
         }
+    }
+
+    private static readonly IReadOnlyDictionary<string, int> EmptyChanges = new Dictionary<string, int>();
+
+    private static IReadOnlyDictionary<string, int> MergeChanges(params IReadOnlyDictionary<string, int>[] sources)
+    {
+        var result = new Dictionary<string, int>();
+        foreach (var source in sources)
+        foreach (var (key, value) in source)
+            result[key] = result.GetValueOrDefault(key) + value;
+        return result;
     }
 
     private async Task ApplyAffinityChangesAsync(Guid sessionId, IReadOnlyDictionary<string, int> changes, int act)

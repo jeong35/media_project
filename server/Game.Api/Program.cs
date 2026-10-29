@@ -43,6 +43,8 @@ app.MapGet("/api/v1/sessions/{sessionId:guid}/choices", async (Guid sessionId, M
     Results.Ok(await game.GetChoicesAsync(sessionId)));
 app.MapPost("/api/v1/sessions/{sessionId:guid}/choices", async (Guid sessionId, ChoiceRequest request, MockGameService game) =>
     Results.Ok(await game.SubmitChoiceAsync(sessionId, request)));
+app.MapPost("/api/v1/sessions/{sessionId:guid}/farming", async (Guid sessionId, FarmingResultRequest request, MockGameService game) =>
+    Results.Ok(await game.SubmitFarmingAsync(sessionId, request)));
 
 app.Run();
 public partial class Program;

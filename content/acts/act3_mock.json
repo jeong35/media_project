@@ -1,0 +1,107 @@
+{
+  "act": 3,
+  "timeLabel": "멸망 2년 전",
+  "scene": {
+    "backgroundId": "community_barley_field",
+    "npcId": "farmer_marta",
+    "npcName": "마르타",
+    "npcEmotion": "warm",
+    "narration": "균열 대비가 시작된 뒤에도 주민들의 하루는 계속됐다. 공동밭에서는 농부 마르타가 돌투성이 땅에 마력보리 씨앗을 펼쳐 놓았다.",
+    "openingDialogue": "하늘도 중요하지만 사람은 오늘 먹고살아야 하지요. 이 밭을 어떻게 일굴지 영주님도 손을 보태시겠어요?"
+  },
+  "mockDialogue": {
+    "dialogue": "말뿐인 영주는 아닌 모양이네요. 돌을 치우고, 씨앗을 심고, 남은 물을 어디에 쓸지 직접 정해 보세요.",
+    "emotion": "smiling",
+    "feedback": "마르타는 영주에게 흙 묻은 작업 장갑을 건넸다.",
+    "acceptedTags": ["kind", "pragmatic"],
+    "careerFeedback": "평범한 삶을 지키기 위해 직접 손을 쓰는 태도가 드러났다.",
+    "summary": "영주는 주민 공동밭의 마력보리 농사에 직접 참여하기로 했다."
+  },
+  "choices": [
+    {
+      "choiceId": "farm_with_residents",
+      "label": "A. 주민들과 같은 도구로 함께 일한다.",
+      "resultNarration": "영주는 주민들과 같은 줄에 서서 괭이를 들었다.",
+      "feedback": "주민들은 영주가 자신들과 같은 속도로 일하는 모습을 지켜봤다.",
+      "changes": { "legitimacy": 5 },
+      "affinityChanges": { "leadership": 3 },
+      "flags": ["worked_with_residents"]
+    },
+    {
+      "choiceId": "test_magic_irrigation",
+      "label": "B. 리아의 마력 관개법을 시험한다.",
+      "resultNarration": "밭고랑 사이로 푸른 마력의 물길이 이어졌다.",
+      "feedback": "봉인 연구의 지식이 주민들의 일상에도 쓰이기 시작했다.",
+      "changes": { "ward": 5 },
+      "affinityChanges": { "arcane": 4 },
+      "flags": ["magic_irrigation_tested"]
+    },
+    {
+      "choiceId": "improve_farm_tools",
+      "label": "C. 자금을 들여 농기구를 개량한다.",
+      "resultNarration": "대장간에서 손잡이와 날을 고친 새 농기구가 도착했다.",
+      "feedback": "비용은 들었지만 같은 시간에 더 넓은 밭을 일굴 수 있게 됐다.",
+      "changes": { "treasury": -5 },
+      "affinityChanges": { "craft": 5 },
+      "flags": ["farm_tools_improved"]
+    }
+  ],
+  "activity": "farming",
+  "farming": {
+    "title": "마력보리 공동밭",
+    "instructions": "돌과 잡초를 치우고 씨앗을 배치한 뒤, 남은 물과 작업 방식을 정하세요.",
+    "obstaclePoints": 10,
+    "seedPoints": 20,
+    "completionThreshold": 70,
+    "waterOutcomes": {
+      "community": {
+        "feedback": "남은 물을 주민 공동밭에 나누어 민심이 높아졌다.",
+        "changes": { "legitimacy": 10 },
+        "affinityChanges": { "leadership": 2 }
+      },
+      "ward": {
+        "feedback": "마력보리를 봉화 연료용으로 길러 봉인 준비가 늘었다.",
+        "changes": { "ward": 8 },
+        "affinityChanges": { "arcane": 2 }
+      },
+      "market": {
+        "feedback": "판매용 밭에 물을 집중해 영지 수입을 확보했다.",
+        "changes": { "treasury": 8 },
+        "affinityChanges": { "commerce": 2 }
+      }
+    },
+    "methodOutcomes": {
+      "manual": {
+        "feedback": "주민들과 끝까지 손으로 일해 공동체의 신뢰가 깊어졌다.",
+        "changes": { "legitimacy": 5 },
+        "affinityChanges": { "leadership": 5 }
+      },
+      "magic": {
+        "feedback": "마력을 재배에 응용해 봉인술과 농사의 가능성을 함께 넓혔다.",
+        "changes": { "ward": 5 },
+        "affinityChanges": { "arcane": 8 }
+      },
+      "tools": {
+        "feedback": "개량 도구로 작업 효율을 높였다.",
+        "changes": { "treasury": 5 },
+        "affinityChanges": { "craft": 8 }
+      }
+    },
+    "completionBonus": {
+      "feedback": "밭을 충분히 완성해 남는 마력보리를 비축했다.",
+      "changes": { "treasury": 5 },
+      "affinityChanges": { "commerce": 3 }
+    }
+  },
+  "ending": {
+    "occupationName": "흙을 아는 견습 영주",
+    "title": "멸망을 준비하며 오늘의 밭을 일군 자",
+    "territoryOutcome": "마력보리와 주민의 신뢰를 얻은 영지",
+    "records": [
+      "리아와 균열 대응의 주력 전략을 선택했다.",
+      "마르타와 주민 공동밭의 마력보리를 길렀다."
+    ],
+    "traits": ["다정함", "실리", "생활력"],
+    "shareLine": "그는 멸망의 날을 준비하면서도 오늘 심을 씨앗을 잊지 않았다."
+  }
+}
