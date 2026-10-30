@@ -153,6 +153,11 @@ GET  /api/v1/sessions/{id}
 | Act 4 타이머 복구 | 재접속해도 기존 마감 유지 | 만료 후 자동 주민 대피 | PASS |
 | 전설 위상 해금 | 준비·적성 조건 충족 시 legendary | 기사단장·마탑주 해금 | PASS |
 | B급 톤 해금 | 봉인·마법·제작 업적 결합 | 균열 봉합 농기구 명장 | PASS |
+| Live Provider 성공 | openai 응답으로 선택 진행 | 1회 응답 후 AwaitingChoice | PASS |
+| Live 일시 오류 | 1회 재시도 후 openai 응답 | 2회째 정상 응답 | PASS |
+| Live 영구 오류 | 즉시 고정 대사 폴백 | 1회 뒤 fixed_fallback | PASS |
+| OpenAI HTTP 계약 | Responses API 구조화 출력 | JSON Schema 요청·응답 추출 | PASS |
+| OpenAI 한도 오류 | 불필요한 재시도 없음 | 1회 뒤 fixed_fallback | PASS |
 
 ### 6.5 직업 적성 기반 엔딩
 
@@ -173,13 +178,20 @@ GET  /api/v1/sessions/{id}
 
 ### 6.6 대화 생성 실패 복구
 
-대화 생성 경계를 별도 서비스로 분리했다. 일시 오류는 같은 요청 안에서 1회 재시도하고, 잘못된 JSON이나 타임아웃이 두 번 발생하면 Act별 고정 대사로 전환한다. 세 경우 모두 Godot에서 선택, 엔딩과 재시작까지 완주했다. 이 구조는 이후 Mock Provider를 OpenAI Provider로 교체해도 게임 규칙과 진행 흐름을 유지하기 위한 것이다.
+`IDialogueProvider` 인터페이스 아래 Mock과 OpenAI Provider를 분리했다. `live` 세션은 OpenAI Responses API를 선택하고, NPC 대사·감정·피드백·허용 태그·직업 근거·요약을 Structured Outputs의 JSON Schema로 요청한다. 반환값은 기존 DTO의 길이와 태그 허용 목록을 다시 검증하며 능력치, 성공 여부, 다음 Act와 엔딩 판정은 프롬프트와 Provider 양쪽에서 다루지 않는다.
+
+일시적인 HTTP 429·5xx·시간 초과 또는 잘못된 출력만 설정된 횟수만큼 재시도한다. 인증·설정 오류와 결제·사용량 한도는 반복 호출해도 회복되지 않으므로 즉시 Act별 고정 대사로 전환한다. API 키와 모델은 소스가 아닌 `OpenAI__ApiKey`, `OpenAI__Model` 환경 설정으로만 받는다. 키와 모델이 없는 실제 서버의 `live` 세션에서도 외부 호출 없이 `fixed_fallback`, 시도 1회로 선택지 단계까지 진행했다.
+
+구현 기준은 OpenAI 공식 Structured Outputs와 오류 처리 문서를 사용했다.
+
+- https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses
+- https://developers.openai.com/api/docs/guides/error-codes
 
 ### 6.7 진행 중 체크포인트 복구
 
 농사 조작은 제출 전에도 전용 API로 직렬 저장한다. 별도 테이블을 추가하는 대신 기존 append-only `GameEvent`에 체크포인트를 기록해 이전 SQLite 파일과의 호환성을 유지했다. Act 4는 최초 선택지 조회 시 서버가 절대 마감 시각을 한 번만 저장하고 이후 남은 시간을 계산한다. 따라서 앱을 다시 열어도 20초가 초기화되지 않으며, 마감 뒤 도착한 선택도 서버가 주민 대피로 교정한다.
 
-자동 테스트 16개와 실제 Godot 재실행 스모크 테스트를 통과했다. 농사 재실행에서는 장애물 `[0, 2]`, 씨앗 `[0, 3]`, 물 `market`, 방식 `tools`가 복원됐고, 제한시간 종료 뒤 재실행에서는 남은 시간 `0.00`과 `people_evacuated` 엔딩을 확인했다.
+자동 테스트 21개와 실제 Godot 재실행 스모크 테스트를 통과했다. 농사 재실행에서는 장애물 `[0, 2]`, 씨앗 `[0, 3]`, 물 `market`, 방식 `tools`가 복원됐고, 제한시간 종료 뒤 재실행에서는 남은 시간 `0.00`과 `people_evacuated` 엔딩을 확인했다.
 
 ## 7. 문제와 해결
 
@@ -214,15 +226,17 @@ GET  /api/v1/sessions/{id}
 - 실제 Godot 클라이언트를 포함한 종단간 자동 검증
 - 진행 중 체크포인트와 서버 권위 제한시간 복구
 - 플레이 근거를 요구하는 데이터 기반 위상·톤 해금 규칙
+- Mock·OpenAI Provider 교체, 구조화 출력 검증과 오류별 폴백
 - 의존성 취약점 탐지와 해결
 
 ## 9. 한계와 다음 작업
 
-현재 고정 콘텐츠 기반 Mock 게임은 Act 1부터 최종 엔딩까지 완주된다. 다음 단계에서는 AI를 연결하기 전에 아래 안정성 범위를 보강한다.
+현재 고정 콘텐츠 기반 Mock 게임은 Act 1부터 최종 엔딩까지 완주되며 OpenAI 대화 Provider 경계도 연결됐다. 다음 작업은 아래와 같다.
 
-1. Mock과 같은 계약을 사용하는 OpenAI Provider 경계 설계
+1. 로컬 환경 변수에만 API 키와 모델을 넣어 실제 Live 대화 품질·지연 검증
+2. 확정된 엔딩 사실을 표현만 바꾸는 생성형 직업 후일담 Provider 추가
 
-전체 Mock 게임이 안정적으로 완주된 뒤에만 OpenAI API Provider와 생성형 후일담을 추가한다.
+Live 호출이 실패해도 현재 고정 대사와 고정 직업 엔딩으로 완주할 수 있어야 한다.
 
 ## 10. 재현 방법
 

@@ -16,17 +16,20 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
 
     public async Task<SessionStartResponse> StartSessionAsync(string mode, string failureScenario = "none")
     {
-        if (!string.Equals(mode, "mock", StringComparison.OrdinalIgnoreCase))
-            throw new GameRuleException("UNSUPPORTED_MODE", "현재 세로 슬라이스는 Mock 모드만 지원합니다.");
+        var providerMode = mode.ToLowerInvariant();
+        if (providerMode is not ("mock" or "live"))
+            throw new GameRuleException("UNSUPPORTED_MODE", "mode는 mock 또는 live여야 합니다.");
         if (!FailureScenarios.Contains(failureScenario))
             throw new GameRuleException("INVALID_FAILURE_SCENARIO", "허용되지 않은 Mock 실패 시나리오입니다.");
+        if (providerMode == "live" && failureScenario != "none")
+            throw new GameRuleException("INVALID_FAILURE_SCENARIO", "Live 모드에는 Mock 실패 시나리오를 사용할 수 없습니다.");
 
         var act = content.GetAct(1);
         var now = DateTimeOffset.UtcNow;
         var session = new GameSession
         {
             Id = Guid.NewGuid(), CreatedAt = now, UpdatedAt = now,
-            Mode = failureScenario == "none" ? "Mock" : $"Mock:{failureScenario}",
+            Mode = providerMode == "live" ? "Live" : failureScenario == "none" ? "Mock" : $"Mock:{failureScenario}",
             Military = content.InitialState.Military, Treasury = content.InitialState.Treasury,
             Legitimacy = content.InitialState.Legitimacy, Ward = content.InitialState.Ward
         };
@@ -69,7 +72,8 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         if (request.NpcId != act.Scene.NpcId) throw new GameRuleException("INVALID_NPC", "현재 장면의 NPC와 일치하지 않습니다.");
         if (string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 300) throw new GameRuleException("INVALID_TEXT", "대화는 1자 이상 300자 이하로 입력해 주세요.");
 
-        var generated = await dialogueGeneration.GenerateAsync(act, GetFailureScenario(session.Mode));
+        var generated = await dialogueGeneration.GenerateAsync(GetProviderId(session.Mode), act, request.Text,
+            GetFailureScenario(session.Mode), TraitIds);
         var dialogue = generated.Content;
         var response = new DialogueResponse(dialogue.Dialogue, dialogue.Emotion, dialogue.Feedback,
             dialogue.AcceptedTags, dialogue.CareerFeedback, 0, true, generated.ResponseSource,
@@ -318,6 +322,9 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
 
     private static string GetFailureScenario(string mode) =>
         mode.StartsWith("Mock:", StringComparison.Ordinal) ? mode[5..] : "none";
+
+    private static string GetProviderId(string mode) =>
+        mode.StartsWith("Live", StringComparison.OrdinalIgnoreCase) ? "openai" : "mock";
 
     private static void ApplyStateChanges(GameSession session, IReadOnlyDictionary<string, int> changes)
     {

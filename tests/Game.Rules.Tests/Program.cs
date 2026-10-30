@@ -4,6 +4,9 @@ using Game.Api.Errors;
 using Game.Api.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Net;
+using System.Text;
 using System.Text.Json;
 
 var scenarios = new[]
@@ -36,6 +39,14 @@ results.Add(RunLegacyEndingCompatibility());
 results.Add(await RunDialogueFailureScenarioAsync(content, "transient_once", false, "mock"));
 results.Add(await RunDialogueFailureScenarioAsync(content, "invalid_payload", true, "fixed_fallback"));
 results.Add(await RunDialogueFailureScenarioAsync(content, "timeout", true, "fixed_fallback"));
+results.Add(await RunLiveProviderScenarioAsync(content, new StubDialogueProvider("openai", StubProviderBehavior.Success),
+    "openai", false, 1));
+results.Add(await RunLiveProviderScenarioAsync(content, new StubDialogueProvider("openai", StubProviderBehavior.TransientThenSuccess),
+    "openai", false, 2));
+results.Add(await RunLiveProviderScenarioAsync(content, new StubDialogueProvider("openai", StubProviderBehavior.PermanentFailure),
+    "fixed_fallback", true, 1));
+results.Add(await RunOpenAiHttpContractAsync(content));
+results.Add(await RunOpenAiQuotaFallbackAsync(content));
 results.Add(await RunFarmingProgressRecoveryAsync(content));
 results.Add(await RunFinalTimerRecoveryAsync(content));
 
@@ -184,6 +195,98 @@ static async Task<TestResult> RunDialogueFailureScenarioAsync(MockGameContent co
     }
 }
 
+static async Task<TestResult> RunLiveProviderScenarioAsync(MockGameContent content, IDialogueProvider liveProvider,
+    string expectedSource, bool expectedFallback, int expectedAttempts)
+{
+    try
+    {
+        await using var fixture = await GameFixture.CreateAsync(content, liveProvider);
+        var start = await fixture.Service.StartSessionAsync("live");
+        var response = await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, "주민이 안전한 계획을 세운다.", NewKey()));
+        var snapshot = await fixture.Service.GetSessionAsync(start.SessionId);
+        var passed = response.ResponseSource == expectedSource && response.FallbackUsed == expectedFallback
+            && response.AttemptCount == expectedAttempts && snapshot.Phase == "AwaitingChoice";
+        var expected = $"{expectedSource}/fallback={expectedFallback.ToString().ToLowerInvariant()}/시도 {expectedAttempts}";
+        var actual = $"{response.ResponseSource}/fallback={response.FallbackUsed.ToString().ToLowerInvariant()}/시도 {response.AttemptCount}";
+        return new TestResult($"Live Provider-{((StubDialogueProvider)liveProvider).Behavior}", expected, actual,
+            snapshot.Phase, passed, passed ? null : "Provider 선택, 재시도 또는 폴백 경계가 예상과 다릅니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("Live Provider", expectedSource, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunOpenAiHttpContractAsync(MockGameContent content)
+{
+    const string expected = "Responses API/json_schema/output_text";
+    try
+    {
+        var generated = new GeneratedDialogue("구조화된 대사입니다.", "calm", "응답 근거입니다.",
+            ["kind"], "직업 근거입니다.", "대화 요약입니다.");
+        var handler = new CapturingHttpHandler((_, _) => JsonResponse(HttpStatusCode.OK, new
+        {
+            status = "completed",
+            output = new[] { new { type = "message", content = new[]
+                { new { type = "output_text", text = JsonSerializer.Serialize(generated, new JsonSerializerOptions(JsonSerializerDefaults.Web)) } } } }
+        }));
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.openai.com/v1/") };
+        var provider = new OpenAiDialogueProvider(client, Options.Create(new OpenAiOptions
+        {
+            ApiKey = "test-placeholder", Model = "test-model", TimeoutSeconds = 2, MaxOutputTokens = 300
+        }));
+        var raw = await provider.GenerateAsync(new DialogueProviderRequest(content.GetAct(1), "주민을 먼저 지킨다.",
+            "none", 1, ["kind", "pragmatic"]));
+        var parsed = JsonSerializer.Deserialize<GeneratedDialogue>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var requestOk = handler.RequestBody?.Contains("\"json_schema\"") == true
+            && handler.RequestBody.Contains("\"additionalProperties\":false")
+            && !handler.RequestBody.Contains("maxLength")
+            && handler.AuthorizationScheme == "Bearer" && handler.RequestUri?.AbsolutePath == "/v1/responses";
+        var passed = handler.CallCount == 1 && requestOk && parsed?.Dialogue == generated.Dialogue;
+        return new TestResult("OpenAI HTTP 계약", expected,
+            passed ? expected : "request-or-response-mismatch", $"HTTP 호출 {handler.CallCount}회", passed,
+            passed ? null : "Responses API 요청 스키마 또는 output_text 추출이 계약과 다릅니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("OpenAI HTTP 계약", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunOpenAiQuotaFallbackAsync(MockGameContent content)
+{
+    const string expected = "fixed_fallback/시도 1";
+    try
+    {
+        var handler = new CapturingHttpHandler((_, _) => JsonResponse(HttpStatusCode.TooManyRequests,
+            new { error = new { code = "credit_balance_exhausted", message = "quota" } }));
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.openai.com/v1/") };
+        var provider = new OpenAiDialogueProvider(client, Options.Create(new OpenAiOptions
+        {
+            ApiKey = "test-placeholder", Model = "test-model", TimeoutSeconds = 2
+        }));
+        await using var fixture = await GameFixture.CreateAsync(content, provider);
+        var start = await fixture.Service.StartSessionAsync("live");
+        var response = await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, "계획을 계속한다.", NewKey()));
+        var actual = $"{response.ResponseSource}/시도 {response.AttemptCount}";
+        var passed = actual == expected && response.FallbackUsed && handler.CallCount == 1;
+        return new TestResult("OpenAI 영구 한도 오류", expected, actual, $"HTTP 호출 {handler.CallCount}회", passed,
+            passed ? null : "결제·사용량 한도 오류를 불필요하게 재시도했습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("OpenAI 영구 한도 오류", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, object payload) => new(statusCode)
+{
+    Content = new StringContent(JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+        Encoding.UTF8, "application/json")
+};
+
 static async Task<TestResult> RunFarmingProgressRecoveryAsync(MockGameContent content)
 {
     const string expected = "장애물 0,2/씨앗 0,3/market/tools";
@@ -322,14 +425,16 @@ sealed class GameFixture : IAsyncDisposable
         Service = service;
     }
 
-    public static async Task<GameFixture> CreateAsync(MockGameContent content)
+    public static async Task<GameFixture> CreateAsync(MockGameContent content, IDialogueProvider? liveProvider = null)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<GameDbContext>().UseSqlite(connection).Options;
         var database = new GameDbContext(options);
         await database.Database.EnsureCreatedAsync();
-        var dialogueGeneration = new DialogueGenerationService(new MockDialogueProvider());
+        var providers = new List<IDialogueProvider> { new MockDialogueProvider() };
+        if (liveProvider is not null) providers.Add(liveProvider);
+        var dialogueGeneration = new DialogueGenerationService(providers);
         return new GameFixture(connection, database, new MockGameService(database, content, dialogueGeneration));
     }
 
@@ -337,5 +442,43 @@ sealed class GameFixture : IAsyncDisposable
     {
         await Database.DisposeAsync();
         await connection.DisposeAsync();
+    }
+}
+
+enum StubProviderBehavior { Success, TransientThenSuccess, PermanentFailure }
+
+sealed class StubDialogueProvider(string providerId, StubProviderBehavior behavior) : IDialogueProvider
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    public string ProviderId { get; } = providerId;
+    public int MaximumAttempts => 2;
+    public StubProviderBehavior Behavior { get; } = behavior;
+
+    public Task<string> GenerateAsync(DialogueProviderRequest request, CancellationToken cancellationToken = default)
+    {
+        if (Behavior == StubProviderBehavior.TransientThenSuccess && request.Attempt == 1)
+            throw new DialogueProviderException("temporary", true);
+        if (Behavior == StubProviderBehavior.PermanentFailure)
+            throw new DialogueProviderException("configuration", false);
+        var generated = new GeneratedDialogue("고정 계약을 지킨 Live 대사입니다.", "determined",
+            "Live Provider 응답을 검증했다.", ["kind"], "대화 성향 근거를 남겼다.", "Live 응답 요약");
+        return Task.FromResult(JsonSerializer.Serialize(generated, JsonOptions));
+    }
+}
+
+sealed class CapturingHttpHandler(Func<int, HttpRequestMessage, HttpResponseMessage> responseFactory) : HttpMessageHandler
+{
+    public int CallCount { get; private set; }
+    public string? RequestBody { get; private set; }
+    public string? AuthorizationScheme { get; private set; }
+    public Uri? RequestUri { get; private set; }
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        CallCount += 1;
+        RequestBody = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+        AuthorizationScheme = request.Headers.Authorization?.Scheme;
+        RequestUri = request.RequestUri;
+        return responseFactory(CallCount, request);
     }
 }

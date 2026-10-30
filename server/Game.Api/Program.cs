@@ -10,7 +10,12 @@ builder.Services.AddDbContext<GameDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("GameDb") ?? "Data Source=game.db"));
 builder.Services.AddSingleton(MockContentLoader.Load());
 builder.Services.AddSingleton<MockDialogueProvider>();
-builder.Services.AddSingleton<DialogueGenerationService>();
+builder.Services.AddSingleton<IDialogueProvider>(services => services.GetRequiredService<MockDialogueProvider>());
+builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("OpenAI"));
+builder.Services.AddHttpClient<OpenAiDialogueProvider>(client =>
+    client.BaseAddress = new Uri("https://api.openai.com/v1/"));
+builder.Services.AddTransient<IDialogueProvider>(services => services.GetRequiredService<OpenAiDialogueProvider>());
+builder.Services.AddScoped<DialogueGenerationService>();
 builder.Services.AddScoped<MockGameService>();
 
 var app = builder.Build();
