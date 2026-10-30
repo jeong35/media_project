@@ -12,6 +12,7 @@ public sealed class OpenAiOptions
     public string Model { get; init; } = string.Empty;
     public int TimeoutSeconds { get; init; } = 12;
     public int MaxOutputTokens { get; init; } = 500;
+    public int CareerEndingMaxOutputTokens { get; init; } = 1_200;
     public int MaxRetries { get; init; } = 1;
 }
 

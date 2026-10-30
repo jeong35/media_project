@@ -18,7 +18,8 @@ public sealed record EndingResponse(string OccupationName, string Title, string 
     IReadOnlyList<string> Traits, string ShareLine, string TerritoryFateId = "pending", string CareerRank = "survivor",
     string EndingTone = "orthodox", IReadOnlyList<CareerAffinityResponse>? TopCareerAffinities = null,
     IReadOnlyList<string>? CareerEvidence = null, string Epilogue = "", string GenerationSource = "fixed_template",
-    bool GenerationFallbackUsed = false, int GenerationAttemptCount = 1);
+    bool GenerationFallbackUsed = false, int GenerationAttemptCount = 1, int GenerationCandidateCount = 1,
+    int SelectedCandidateIndex = 0, int SelectionScore = 0);
 public sealed record NextActResponse(int Act, string TimeLabel, SceneResponse Scene, string OpeningDialogue, int DialogueRemaining);
 public sealed record NextActivityResponse(string ActivityId, string Title, string Instructions);
 public sealed record ChoiceResultResponse(string ResultNarration, string Feedback, IReadOnlyDictionary<string, int> AppliedChanges,

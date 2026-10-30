@@ -55,7 +55,8 @@ public sealed class OpenAiCareerEndingProvider(HttpClient httpClient, IOptions<O
             {
                 role = "developer",
                 content = "당신은 한국어 판타지 게임의 엔딩 문구 편집자다. 서버가 확정한 영지 운명, 직업 위상, 엔딩 톤과 업적을 바꾸지 않는다. " +
-                    "occupationName에는 기본 직업명을 정확히 포함하고 30자 이내로 표현한다. epilogue는 제공된 사실만 사용해 3~5문장으로 작성한다."
+                    "서로 다른 후보를 정확히 3개 만든다. 각 occupationName에는 기본 직업명을 정확히 포함하고 30자 이내로 표현한다. " +
+                    "각 epilogue는 제공된 사실만 사용해 3~5문장으로 작성하고, 플레이 근거와 직업 사이의 인과관계를 설명한다."
             },
             new
             {
@@ -63,7 +64,7 @@ public sealed class OpenAiCareerEndingProvider(HttpClient httpClient, IOptions<O
                 content = JsonSerializer.Serialize(facts, JsonOptions)
             }
         },
-        max_output_tokens = Math.Clamp(settings.MaxOutputTokens, 100, 2_000),
+        max_output_tokens = Math.Clamp(settings.CareerEndingMaxOutputTokens, 300, 4_000),
         text = new
         {
             format = new
@@ -76,10 +77,25 @@ public sealed class OpenAiCareerEndingProvider(HttpClient httpClient, IOptions<O
                     type = "object",
                     properties = new Dictionary<string, object>
                     {
-                        ["occupationName"] = new { type = "string" },
-                        ["epilogue"] = new { type = "string" }
+                        ["candidates"] = new
+                        {
+                            type = "array",
+                            minItems = 3,
+                            maxItems = 3,
+                            items = new
+                            {
+                                type = "object",
+                                properties = new Dictionary<string, object>
+                                {
+                                    ["occupationName"] = new { type = "string" },
+                                    ["epilogue"] = new { type = "string" }
+                                },
+                                required = new[] { "occupationName", "epilogue" },
+                                additionalProperties = false
+                            }
+                        }
                     },
-                    required = new[] { "occupationName", "epilogue" },
+                    required = new[] { "candidates" },
                     additionalProperties = false
                 }
             }

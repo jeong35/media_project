@@ -419,7 +419,8 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         return new EndingResponse(generated.Content.OccupationName, outcome.Title, outcome.TerritoryOutcome,
             endingRecords, outcome.Traits, outcome.ShareLine,
             outcome.TerritoryFateId, careerRank, endingTone, affinityFacts, careerEvidence,
-            generated.Content.Epilogue, generated.ResponseSource, generated.FallbackUsed, generated.AttemptCount);
+            generated.Content.Epilogue, generated.ResponseSource, generated.FallbackUsed, generated.AttemptCount,
+            generated.CandidateCount, generated.SelectedCandidateIndex, generated.SelectionScore);
     }
 
     private static int GetStateValue(GameStateResponse state, string id) => id switch

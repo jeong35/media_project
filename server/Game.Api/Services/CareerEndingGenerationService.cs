@@ -8,8 +8,9 @@ public sealed record CareerEndingFacts(string TemplateOccupationName, string Tit
     IReadOnlyList<CareerAffinityResponse> TopCareerAffinities, IReadOnlyList<string> CareerEvidence,
     IReadOnlyList<string> Traits);
 public sealed record GeneratedCareerEnding(string OccupationName, string Epilogue);
+public sealed record GeneratedCareerEndingCandidates(IReadOnlyList<GeneratedCareerEnding> Candidates);
 public sealed record CareerEndingGenerationResult(GeneratedCareerEnding Content, string ResponseSource,
-    bool FallbackUsed, int AttemptCount);
+    bool FallbackUsed, int AttemptCount, int CandidateCount, int SelectedCandidateIndex, int SelectionScore);
 public sealed record CareerEndingProviderRequest(CareerEndingFacts Facts, int Attempt);
 
 public interface ICareerEndingProvider
@@ -34,7 +35,7 @@ public sealed class MockCareerEndingProvider : ICareerEndingProvider
     public int MaximumAttempts => 1;
 
     public Task<string> GenerateAsync(CareerEndingProviderRequest request, CancellationToken cancellationToken = default) =>
-        Task.FromResult(JsonSerializer.Serialize(CareerEndingGenerationService.BuildFixedContent(request.Facts), JsonOptions));
+        Task.FromResult(JsonSerializer.Serialize(CareerEndingGenerationService.BuildMockCandidates(request.Facts), JsonOptions));
 }
 
 public sealed class CareerEndingGenerationService(IEnumerable<ICareerEndingProvider> providers)
@@ -54,10 +55,16 @@ public sealed class CareerEndingGenerationService(IEnumerable<ICareerEndingProvi
             try
             {
                 var raw = await provider.GenerateAsync(new CareerEndingProviderRequest(facts, attempt), cancellationToken);
-                var generated = JsonSerializer.Deserialize<GeneratedCareerEnding>(raw, JsonOptions)
+                var generated = JsonSerializer.Deserialize<GeneratedCareerEndingCandidates>(raw, JsonOptions)
                     ?? throw new JsonException("Career ending payload was empty.");
                 Validate(generated, facts);
-                return new CareerEndingGenerationResult(generated, provider.ProviderId, false, attempt);
+                var selection = generated.Candidates
+                    .Select((candidate, index) => new CandidateSelection(candidate, index, Score(candidate, facts)))
+                    .OrderByDescending(candidate => candidate.Score)
+                    .ThenBy(candidate => candidate.Index)
+                    .First();
+                return new CareerEndingGenerationResult(selection.Content, provider.ProviderId, false, attempt,
+                    generated.Candidates.Count, selection.Index, selection.Score);
             }
             catch (CareerEndingProviderException error) when (!error.Retryable)
             {
@@ -89,10 +96,39 @@ public sealed class CareerEndingGenerationService(IEnumerable<ICareerEndingProvi
         return new GeneratedCareerEnding(facts.TemplateOccupationName, epilogue);
     }
 
-    private static CareerEndingGenerationResult FixedFallback(CareerEndingFacts facts, int attemptCount) =>
-        new(BuildFixedContent(facts), "fixed_fallback", true, attemptCount);
+    public static GeneratedCareerEndingCandidates BuildMockCandidates(CareerEndingFacts facts)
+    {
+        var firstEvidence = facts.CareerEvidence.ElementAtOrDefault(0) ?? "위기 속에서 자신의 역할을 끝까지 다했다.";
+        var secondEvidence = facts.CareerEvidence.ElementAtOrDefault(1) ?? firstEvidence;
+        var traits = facts.Traits.Take(2).ToArray();
+        var firstTrait = traits.ElementAtOrDefault(0) ?? "용기";
+        var secondTrait = traits.ElementAtOrDefault(1) ?? firstTrait;
+        return new GeneratedCareerEndingCandidates([
+            BuildFixedContent(facts),
+            new GeneratedCareerEnding(facts.TemplateOccupationName,
+                $"{facts.TerritoryOutcome}의 기록은 오래 남았다. {firstEvidence} {secondEvidence} " +
+                $"이 두 선택은 그가 '{facts.TemplateOccupationName}'로 불리게 된 직접적인 근거가 되었다. " +
+                $"그의 {firstTrait}과 {secondTrait}은 다음 세대의 기준이 되었다."),
+            new GeneratedCareerEnding(facts.TemplateOccupationName,
+                $"북부 사람들은 위기가 지나간 뒤에도 그를 기억했다. 그는 '{facts.TemplateOccupationName}'라는 이름을 받아들였다. " +
+                $"그의 {firstTrait}은 오래도록 사람들에게 전해졌다. 마침내 새로운 시대가 열렸다.")
+        ]);
+    }
 
-    private static void Validate(GeneratedCareerEnding generated, CareerEndingFacts facts)
+    private static CareerEndingGenerationResult FixedFallback(CareerEndingFacts facts, int attemptCount) =>
+        new(BuildFixedContent(facts), "fixed_fallback", true, attemptCount, 0, -1, 0);
+
+    private static void Validate(GeneratedCareerEndingCandidates generated, CareerEndingFacts facts)
+    {
+        if (generated.Candidates is null || generated.Candidates.Count != 3)
+            throw new InvalidDataException("Career ending provider must return exactly three candidates.");
+        foreach (var candidate in generated.Candidates) ValidateCandidate(candidate, facts);
+        if (generated.Candidates.Select(candidate => $"{candidate.OccupationName}\n{candidate.Epilogue}")
+            .Distinct(StringComparer.Ordinal).Count() != 3)
+            throw new InvalidDataException("Career ending candidates must be distinct.");
+    }
+
+    private static void ValidateCandidate(GeneratedCareerEnding generated, CareerEndingFacts facts)
     {
         if (string.IsNullOrWhiteSpace(generated.OccupationName) || string.IsNullOrWhiteSpace(generated.Epilogue))
             throw new InvalidDataException("Career ending payload did not satisfy the required contract.");
@@ -105,4 +141,21 @@ public sealed class CareerEndingGenerationService(IEnumerable<ICareerEndingProvi
         if (sentenceCount is < 3 or > 5)
             throw new InvalidDataException("Career ending epilogue must contain three to five sentences.");
     }
+
+    private static int Score(GeneratedCareerEnding candidate, CareerEndingFacts facts)
+    {
+        var score = candidate.OccupationName.Equals(facts.TemplateOccupationName, StringComparison.Ordinal) ? 2 : 1;
+        if (candidate.Epilogue.Contains(facts.TerritoryOutcome, StringComparison.Ordinal)) score += 4;
+        score += facts.CareerEvidence.Count(evidence => ContainsFact(candidate.Epilogue, evidence)) * 3;
+        score += facts.Traits.Count(trait => ContainsFact(candidate.Epilogue, trait)) * 2;
+        return score;
+    }
+
+    private static bool ContainsFact(string epilogue, string fact)
+    {
+        var normalized = fact.Trim().TrimEnd('.', '!', '?');
+        return normalized.Length >= 2 && epilogue.Contains(normalized, StringComparison.Ordinal);
+    }
+
+    private sealed record CandidateSelection(GeneratedCareerEnding Content, int Index, int Score);
 }
