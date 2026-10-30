@@ -120,8 +120,8 @@
       "shareLine": "그의 선택은 영지를 구하지 못했지만 다음 멸망을 막을 기록으로 남았다."
     },
     "careerRules": {
-      "legendaryPreparedStates": 3,
-      "legendaryAffinityScore": 30,
+      "legendaryPreparedStates": 2,
+      "legendaryAffinityScore": 24,
       "rankByTerritoryFate": {
         "self_saved": "accomplished",
         "external_aid": "accomplished",
@@ -136,6 +136,30 @@
         "accomplished": "orthodox",
         "legendary": "prestige"
       },
+      "toneAchievements": [
+        {
+          "achievementId": "arcane_field_engineer",
+          "displayName": "봉인술을 밭으로 가져온 장인",
+          "priority": 200,
+          "territoryFateIds": ["self_saved"],
+          "finalChoiceId": "final_ward",
+          "minimumAffinityScores": { "arcane": 20, "craft": 15 },
+          "endingTone": "b_grade",
+          "occupationName": "균열 봉합 농기구 명장",
+          "evidence": "봉인술과 개량 농기구를 함께 발전시켜 하늘과 밭의 균열을 모두 다뤘다."
+        },
+        {
+          "achievementId": "tool_diplomat",
+          "displayName": "개량 농기구로 연 협상",
+          "priority": 100,
+          "territoryFateIds": ["external_aid"],
+          "finalChoiceId": "final_external_aid",
+          "minimumAffinityScores": { "diplomacy": 20, "craft": 13 },
+          "endingTone": "unexpected",
+          "occupationName": "왕국 공인 농기구 외교관",
+          "evidence": "개량 농기구의 생산성을 협상 근거로 삼아 외부 지원을 끌어냈다."
+        }
+      ],
       "templates": {
         "martial": {
           "displayName": "군사",

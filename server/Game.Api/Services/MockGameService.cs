@@ -365,22 +365,32 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var topScore = topAffinities.FirstOrDefault()?.Score ?? 0;
         var careerRank = baseRank == "accomplished" && preparedCount >= careerRules.LegendaryPreparedStates
             && topScore >= careerRules.LegendaryAffinityScore ? "legendary" : baseRank;
-        var endingTone = careerRules.ToneByCareerRank.TryGetValue(careerRank, out var mappedTone)
+        var baseTone = careerRules.ToneByCareerRank.TryGetValue(careerRank, out var mappedTone)
             ? mappedTone
             : throw new InvalidOperationException($"Ending tone was not found for rank: {careerRank}");
+        var affinityScoreById = affinityScores.ToDictionary(affinity => affinity.AffinityId, affinity => affinity.Score);
+        var toneAchievement = (careerRules.ToneAchievements ?? [])
+            .OrderByDescending(achievement => achievement.Priority)
+            .FirstOrDefault(achievement => achievement.TerritoryFateIds.Contains(outcome.TerritoryFateId)
+                && (achievement.FinalChoiceId is null || achievement.FinalChoiceId == choice.ChoiceId)
+                && achievement.MinimumAffinityScores.All(requirement =>
+                    affinityScoreById.GetValueOrDefault(requirement.Key) >= requirement.Value));
+        var endingTone = toneAchievement?.EndingTone ?? baseTone;
         var careerAffinityId = intendedSucceeded && !string.IsNullOrWhiteSpace(intended.CareerAffinityId)
             ? intended.CareerAffinityId
             : topAffinities.FirstOrDefault()?.AffinityId;
         if (careerAffinityId is null || !careerRules.Templates.TryGetValue(careerAffinityId, out var occupationTemplate))
             throw new InvalidOperationException($"Career template was not found: {careerAffinityId}");
-        if (!occupationTemplate.Occupations.TryGetValue(careerRank, out var occupationName))
+        if (!occupationTemplate.Occupations.TryGetValue(careerRank, out var rankedOccupationName))
             throw new InvalidOperationException($"Occupation template was not found: {careerAffinityId}/{careerRank}");
+        var occupationName = toneAchievement?.OccupationName ?? rankedOccupationName;
         var affinityFacts = topAffinities.Select(affinity =>
         {
             var template = careerRules.Templates[affinity.AffinityId];
             return new CareerAffinityResponse(affinity.AffinityId, affinity.Score, template.Evidence);
         }).ToArray();
         var careerEvidence = new[] { choice.ResultNarration }
+            .Concat(toneAchievement is null ? [] : new[] { toneAchievement.Evidence })
             .Concat(affinityFacts.Select(fact => fact.Evidence))
             .Distinct()
             .Take(3)
@@ -388,9 +398,15 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var timingRecord = timedOut
             ? "결정 시간이 끝나 주민 대피 명령이 자동으로 내려졌다."
             : choice.ResultNarration;
+        var endingRecords = new List<string>
+        {
+            timingRecord,
+            $"최종 준비 상태: 군사 {state.Military}, 재정 {state.Treasury}, 정통성 {state.Legitimacy}, 봉인 {state.Ward}",
+            $"준비 기준을 충족한 핵심 상태는 {preparedCount}개였다."
+        };
+        if (toneAchievement is not null) endingRecords.Add($"해금 업적: {toneAchievement.DisplayName}");
         return new EndingResponse(occupationName, outcome.Title, outcome.TerritoryOutcome,
-            [timingRecord, $"최종 준비 상태: 군사 {state.Military}, 재정 {state.Treasury}, 정통성 {state.Legitimacy}, 봉인 {state.Ward}",
-                $"준비 기준을 충족한 핵심 상태는 {preparedCount}개였다."], outcome.Traits, outcome.ShareLine,
+            endingRecords, outcome.Traits, outcome.ShareLine,
             outcome.TerritoryFateId, careerRank, endingTone, affinityFacts, careerEvidence);
     }
 

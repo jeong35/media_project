@@ -9,17 +9,21 @@ using System.Text.Json;
 var scenarios = new[]
 {
     new FateScenario("자력 생존-기사단", "rebuild_knights", "train_defenders", "farm_with_residents",
-        "community", "manual", "final_defense", false, "self_saved", "accomplished", "martial", "균열 수비대장"),
+        "community", "manual", "final_defense", false, "self_saved", "legendary", "prestige", "martial", "구국의 기사단장"),
     new FateScenario("자력 생존-봉인식", "prepare_evacuation", "research_ward", "farm_with_residents",
-        "community", "manual", "final_ward", false, "self_saved", "accomplished", "leadership", "북부 봉화술사"),
+        "community", "manual", "final_ward", false, "self_saved", "accomplished", "orthodox", "leadership", "북부 봉화술사"),
     new FateScenario("외부 지원", "prepare_evacuation", "seek_allies", "improve_farm_tools",
-        "market", "tools", "final_external_aid", false, "external_aid", "accomplished", "diplomacy", "북부 연합 조정관"),
+        "market", "tools", "final_external_aid", false, "external_aid", "accomplished", "unexpected", "diplomacy", "왕국 공인 농기구 외교관"),
+    new FateScenario("전설 위상-봉인식", "prepare_evacuation", "research_ward", "test_magic_irrigation",
+        "ward", "magic", "final_ward", false, "self_saved", "legendary", "prestige", "arcane", "세 봉화의 마탑주"),
+    new FateScenario("B급 톤-마력 농기구", "prepare_evacuation", "research_ward", "improve_farm_tools",
+        "ward", "tools", "final_ward", false, "self_saved", "accomplished", "b_grade", "arcane", "균열 봉합 농기구 명장"),
     new FateScenario("피해 생존", "prepare_evacuation", "research_ward", "farm_with_residents",
-        "community", "manual", "final_defense", false, "damaged_survival", "survivor", "leadership", "피난민의 길잡이"),
+        "community", "manual", "final_defense", false, "damaged_survival", "survivor", "orthodox", "leadership", "피난민의 길잡이"),
     new FateScenario("시간 초과 대피", "repair_beacon", "research_ward", "test_magic_irrigation",
-        "ward", "magic", "final_evacuate", true, "people_evacuated", "survivor", "arcane", "피난민의 길잡이"),
+        "ward", "magic", "final_evacuate", true, "people_evacuated", "survivor", "orthodox", "arcane", "피난민의 길잡이"),
     new FateScenario("영지 멸망", "repair_beacon", "research_ward", "test_magic_irrigation",
-        "ward", "magic", "final_defense", false, "destroyed", "fallen", "arcane", "유랑 봉화 연구자")
+        "ward", "magic", "final_defense", false, "destroyed", "fallen", "orthodox", "arcane", "유랑 봉화 연구자")
 };
 
 var content = MockContentLoader.Load();
@@ -68,9 +72,9 @@ static async Task<TestResult> RunFateScenarioAsync(MockGameContent content, Fate
         var dominantAffinity = ending.TopCareerAffinities?.FirstOrDefault()?.AffinityId ?? "missing_affinity";
         var passed = actual == scenario.ExpectedFate && ending.CareerRank == scenario.ExpectedRank
             && dominantAffinity == scenario.ExpectedDominantAffinity && ending.OccupationName == scenario.ExpectedOccupation
-            && ending.EndingTone == "orthodox" && ending.CareerEvidence?.Count >= 2;
-        var expected = $"{scenario.ExpectedFate}/{scenario.ExpectedRank}/{scenario.ExpectedOccupation}";
-        var actualSummary = $"{actual}/{ending.CareerRank}/{ending.OccupationName}";
+            && ending.EndingTone == scenario.ExpectedTone && ending.CareerEvidence?.Count >= 2;
+        var expected = $"{scenario.ExpectedFate}/{scenario.ExpectedRank}/{scenario.ExpectedTone}/{scenario.ExpectedOccupation}";
+        var actualSummary = $"{actual}/{ending.CareerRank}/{ending.EndingTone}/{ending.OccupationName}";
         return new TestResult(scenario.Name, expected, actualSummary, $"{FormatState(result.State)}, 1순위 {dominantAffinity}",
             passed, passed ? null : "영지 운명, 직업 위상, 적성 또는 직업명이 기대와 다릅니다.");
     }
@@ -87,7 +91,7 @@ static async Task<TestResult> RunTimeoutGuardAsync(MockGameContent content)
     {
         await using var fixture = await GameFixture.CreateAsync(content);
         var scenario = new FateScenario("", "repair_beacon", "research_ward", "test_magic_irrigation",
-            "ward", "magic", "final_defense", true, expected, "", "", "");
+            "ward", "magic", "final_defense", true, expected, "", "", "", "");
         var progress = await AdvanceToFinalChoiceAsync(fixture.Service, scenario);
         try
         {
@@ -217,7 +221,7 @@ static async Task<TestResult> RunFinalTimerRecoveryAsync(MockGameContent content
     {
         await using var fixture = await GameFixture.CreateAsync(content);
         var scenario = new FateScenario("", "prepare_evacuation", "research_ward", "farm_with_residents",
-            "community", "manual", "final_ward", false, "", "", "", "");
+            "community", "manual", "final_ward", false, "", "", "", "", "");
         var progress = await AdvanceToFinalChoiceAsync(fixture.Service, scenario);
         var recoveredChoices = await fixture.Service.GetChoicesAsync(progress.SessionId);
         var timerPersisted = recoveredChoices.RemainingSeconds is > 0 and < 20;
@@ -301,7 +305,7 @@ static void Assert(bool condition, string message)
 
 sealed record FateScenario(string Name, string Act1Choice, string Act2Choice, string Act3Choice,
     string WaterTarget, string Method, string FinalChoice, bool TimedOut, string ExpectedFate,
-    string ExpectedRank, string ExpectedDominantAffinity, string ExpectedOccupation);
+    string ExpectedRank, string ExpectedTone, string ExpectedDominantAffinity, string ExpectedOccupation);
 sealed record FinalChoiceProgress(Guid SessionId, GameStateResponse State);
 sealed record TestResult(string Name, string Expected, string Actual, string State, bool Passed, string? Error);
 

@@ -151,19 +151,25 @@ GET  /api/v1/sessions/{id}
 | 대화 생성 타임아웃 | 고정 대사 폴백 후 진행 | 고정 대사 폴백 후 진행 | PASS |
 | 농사 중간 복구 | 조작 상태와 선택 복원 | 장애물·씨앗·물·방식 복원 | PASS |
 | Act 4 타이머 복구 | 재접속해도 기존 마감 유지 | 만료 후 자동 주민 대피 | PASS |
+| 전설 위상 해금 | 준비·적성 조건 충족 시 legendary | 기사단장·마탑주 해금 | PASS |
+| B급 톤 해금 | 봉인·마법·제작 업적 결합 | 균열 봉합 농기구 명장 | PASS |
 
 ### 6.5 직업 적성 기반 엔딩
 
 2026-10-30에 누적 직업 적성과 최종 업적을 직업 엔딩에 연결했다. 서버가 영지 운명과 별도로 `careerRank`, `endingTone`, 상위 적성 2개와 근거를 확정하며, 외부 AI 없이 JSON의 고정 직업 템플릿을 사용한다. 성공한 최종 행동은 직업군의 핵심 근거로 우선하고, 실패 결말은 누적 1순위 적성을 반영한다.
 
-| 경로 | 운명 / 위상 / 직업 | 결과 |
+초기 전설 조건인 준비 상태 3개와 적성 30은 현재 콘텐츠에서 도달할 수 없었다. 실제 선택 조합을 계산해 성공한 최종 업적, 준비 상태 2개 이상과 핵심 적성 24 이상으로 조정했다. 의외·B급 톤은 위상과 분리하고 `toneAchievements`에 최종 행동, 영지 운명과 최소 적성 조합을 선언한다. 조건과 직업명은 JSON에 있으므로 같은 형식의 항목을 추가해 엔딩을 확장할 수 있다.
+
+| 경로 | 운명 / 위상 / 톤 / 직업 | 결과 |
 | --- | --- | --- |
-| 기사단 방어 성공 | self_saved / accomplished / 균열 수비대장 | PASS |
-| 봉인식 성공 | self_saved / accomplished / 북부 봉화술사 | PASS |
-| 외부 지원 성공 | external_aid / accomplished / 북부 연합 조정관 | PASS |
-| 피해 생존 | damaged_survival / survivor / 피난민의 길잡이 | PASS |
-| 시간 초과 대피 | people_evacuated / survivor / 피난민의 길잡이 | PASS |
-| 영지 멸망 | destroyed / fallen / 유랑 봉화 연구자 | PASS |
+| 기사단 방어 전설 | self_saved / legendary / prestige / 구국의 기사단장 | PASS |
+| 봉인식 전설 | self_saved / legendary / prestige / 세 봉화의 마탑주 | PASS |
+| 일반 봉인식 | self_saved / accomplished / orthodox / 북부 봉화술사 | PASS |
+| 마법·제작 복합 업적 | self_saved / accomplished / b_grade / 균열 봉합 농기구 명장 | PASS |
+| 외교·제작 복합 업적 | external_aid / accomplished / unexpected / 왕국 공인 농기구 외교관 | PASS |
+| 피해 생존 | damaged_survival / survivor / orthodox / 피난민의 길잡이 | PASS |
+| 시간 초과 대피 | people_evacuated / survivor / orthodox / 피난민의 길잡이 | PASS |
+| 영지 멸망 | destroyed / fallen / orthodox / 유랑 봉화 연구자 | PASS |
 
 ### 6.6 대화 생성 실패 복구
 
@@ -173,7 +179,7 @@ GET  /api/v1/sessions/{id}
 
 농사 조작은 제출 전에도 전용 API로 직렬 저장한다. 별도 테이블을 추가하는 대신 기존 append-only `GameEvent`에 체크포인트를 기록해 이전 SQLite 파일과의 호환성을 유지했다. Act 4는 최초 선택지 조회 시 서버가 절대 마감 시각을 한 번만 저장하고 이후 남은 시간을 계산한다. 따라서 앱을 다시 열어도 20초가 초기화되지 않으며, 마감 뒤 도착한 선택도 서버가 주민 대피로 교정한다.
 
-자동 테스트 14개와 실제 Godot 재실행 스모크 테스트를 통과했다. 농사 재실행에서는 장애물 `[0, 2]`, 씨앗 `[0, 3]`, 물 `market`, 방식 `tools`가 복원됐고, 제한시간 종료 뒤 재실행에서는 남은 시간 `0.00`과 `people_evacuated` 엔딩을 확인했다.
+자동 테스트 16개와 실제 Godot 재실행 스모크 테스트를 통과했다. 농사 재실행에서는 장애물 `[0, 2]`, 씨앗 `[0, 3]`, 물 `market`, 방식 `tools`가 복원됐고, 제한시간 종료 뒤 재실행에서는 남은 시간 `0.00`과 `people_evacuated` 엔딩을 확인했다.
 
 ## 7. 문제와 해결
 
@@ -207,14 +213,14 @@ GET  /api/v1/sessions/{id}
 - 중복 요청과 오류 계약을 고려한 API 안정성
 - 실제 Godot 클라이언트를 포함한 종단간 자동 검증
 - 진행 중 체크포인트와 서버 권위 제한시간 복구
+- 플레이 근거를 요구하는 데이터 기반 위상·톤 해금 규칙
 - 의존성 취약점 탐지와 해결
 
 ## 9. 한계와 다음 작업
 
 현재 고정 콘텐츠 기반 Mock 게임은 Act 1부터 최종 엔딩까지 완주된다. 다음 단계에서는 AI를 연결하기 전에 아래 안정성 범위를 보강한다.
 
-1. 전설 위상과 의외·B급 톤을 해금할 추가 업적 설계
-2. Mock과 같은 계약을 사용하는 OpenAI Provider 경계 설계
+1. Mock과 같은 계약을 사용하는 OpenAI Provider 경계 설계
 
 전체 Mock 게임이 안정적으로 완주된 뒤에만 OpenAI API Provider와 생성형 후일담을 추가한다.
 

@@ -30,7 +30,12 @@ public sealed record FinalOutcomeContent(IReadOnlyDictionary<string, int> Requir
     string? CareerAffinityId = null);
 public sealed record CareerRulesContent(int LegendaryPreparedStates, int LegendaryAffinityScore,
     IReadOnlyDictionary<string, string> RankByTerritoryFate, IReadOnlyDictionary<string, string> ToneByCareerRank,
-    IReadOnlyDictionary<string, CareerTemplateContent> Templates);
+    IReadOnlyDictionary<string, CareerTemplateContent> Templates,
+    IReadOnlyList<CareerToneAchievementContent>? ToneAchievements = null);
+public sealed record CareerToneAchievementContent(string AchievementId, string DisplayName, int Priority,
+    IReadOnlyList<string> TerritoryFateIds, string? FinalChoiceId,
+    IReadOnlyDictionary<string, int> MinimumAffinityScores, string EndingTone,
+    string OccupationName, string Evidence);
 public sealed record CareerTemplateContent(string DisplayName, string Evidence,
     IReadOnlyDictionary<string, string> Occupations);
 
