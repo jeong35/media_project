@@ -127,6 +127,21 @@ GET  /api/v1/sessions/{id}
 - `game.db`, `bin`, `obj`, `.godot`은 Git 제외 확인
 - 실제 API 키, GitHub 토큰과 사용자 대화 데이터가 소스에 없음
 
+### 6.4 영지 운명 자동 테스트
+
+실제 `MockGameService`, 인메모리 SQLite와 현재 JSON 콘텐츠를 사용하는 테스트 러너를 추가했다. 각 시나리오는 Act 1부터 농사와 Act 4 최종 선택까지 진행하며, 응답 엔딩과 저장된 엔딩이 일치하는지도 확인한다.
+
+| 테스트 | 기대 결과 | 실제 결과 | 판정 |
+| --- | --- | --- | --- |
+| 자력 생존-기사단 | self_saved | self_saved | PASS |
+| 자력 생존-봉인식 | self_saved | self_saved | PASS |
+| 외부 지원 | external_aid | external_aid | PASS |
+| 피해 생존 | damaged_survival | damaged_survival | PASS |
+| 시간 초과 대피 | people_evacuated | people_evacuated | PASS |
+| 영지 멸망 | destroyed | destroyed | PASS |
+| 시간 초과 선택 검증 | INVALID_TIMEOUT_CHOICE | INVALID_TIMEOUT_CHOICE | PASS |
+| 중복 요청 방지 | 상태 1회 적용 | 상태 1회 적용 | PASS |
+
 ## 7. 문제와 해결
 
 ### 7.1 실행 환경의 로컬 포트 제한
@@ -164,9 +179,9 @@ GET  /api/v1/sessions/{id}
 
 현재 고정 콘텐츠 기반 Mock 게임은 Act 1부터 최종 엔딩까지 완주된다. 다음 단계에서는 AI를 연결하기 전에 아래 안정성 범위를 보강한다.
 
-1. 주요 영지 운명 분기별 자동 테스트
-2. 직업 적성 기반 직업 위상 판정 세분화
-3. 실제 AI 연결 전 Mock 실패·재시도 동선 보강
+1. 직업 적성 기반 직업 위상 판정 세분화
+2. 실제 AI 연결 전 Mock 실패·재시도 동선 보강
+3. 농사 도중 상태와 Act 4 남은 시간의 세부 복구 정책 확정
 
 전체 Mock 게임이 안정적으로 완주된 뒤에만 OpenAI API Provider와 생성형 후일담을 추가한다.
 
@@ -191,6 +206,12 @@ Godot 실행:
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-timeout
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-save
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-resume
+```
+
+영지 운명 규칙 테스트:
+
+```bash
+dotnet run --project tests/Game.Rules.Tests/Game.Rules.Tests.csproj
 ```
 
 PDF 재생성:
