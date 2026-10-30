@@ -53,6 +53,12 @@ custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
 text = "새 게임"
 
+[node name="ContinueButton" type="Button" parent="Page/TitleScreen"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+disabled = true
+text = "이어하기 · 저장된 세션 없음"
+
 [node name="ConnectionStatus" type="Label" parent="Page/TitleScreen"]
 layout_mode = 2
 text = "Mock 모드 · 로컬 서버 필요"

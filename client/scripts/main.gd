@@ -1,9 +1,12 @@
 extends Control
 
 const API_BASE := "http://127.0.0.1:5050"
+const SESSION_FILE := "user://last_session.cfg"
+const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 
 @onready var title_screen: VBoxContainer = $Page/TitleScreen
 @onready var new_game_button: Button = $Page/TitleScreen/NewGameButton
+@onready var continue_button: Button = $Page/TitleScreen/ContinueButton
 @onready var connection_status: Label = $Page/TitleScreen/ConnectionStatus
 @onready var game_screen: VBoxContainer = $Page/GameScreen
 @onready var act_label: Label = $Page/GameScreen/ActLabel
@@ -79,13 +82,19 @@ var water_target := "community"
 var farming_method := "manual"
 var smoke_test := false
 var smoke_timeout_test := false
+var smoke_save_test := false
+var smoke_save_dialogue_test := false
+var smoke_save_choice_test := false
+var smoke_resume_test := false
 var smoke_runs := 0
 var final_time_limit := 0.0
 var timeout_choice_id := ""
+var saved_session_id := ""
 
 
 func _ready() -> void:
 	new_game_button.pressed.connect(_start_new_game)
+	continue_button.pressed.connect(_continue_game)
 	send_button.pressed.connect(_submit_dialogue)
 	restart_button.pressed.connect(_start_new_game)
 	for index in choice_buttons.size():
@@ -103,9 +112,17 @@ func _ready() -> void:
 	farming_finish_button.pressed.connect(_submit_farming)
 	http_request.request_completed.connect(_on_request_completed)
 	final_choice_timer.timeout.connect(_on_final_choice_timeout)
-	smoke_test = "--smoke-test" in OS.get_cmdline_user_args() or "--smoke-timeout" in OS.get_cmdline_user_args()
-	smoke_timeout_test = "--smoke-timeout" in OS.get_cmdline_user_args()
-	if smoke_test:
+	var arguments := OS.get_cmdline_user_args()
+	smoke_timeout_test = "--smoke-timeout" in arguments
+	smoke_save_dialogue_test = "--smoke-save-dialogue" in arguments
+	smoke_save_choice_test = "--smoke-save-choice" in arguments
+	smoke_save_test = "--smoke-save" in arguments or smoke_save_dialogue_test or smoke_save_choice_test
+	smoke_resume_test = "--smoke-resume" in arguments
+	smoke_test = "--smoke-test" in arguments or smoke_timeout_test or smoke_save_test or smoke_resume_test
+	_load_saved_session_reference()
+	if smoke_resume_test:
+		_continue_game()
+	elif smoke_test:
 		_start_new_game()
 
 
@@ -133,7 +150,21 @@ func _start_new_game() -> void:
 	final_choice_timer.stop()
 	connection_status.text = "새 세션을 만드는 중…"
 	new_game_button.disabled = true
+	continue_button.disabled = true
 	_request_json("start", HTTPClient.METHOD_POST, "/api/v1/sessions", {"mode": "mock"})
+
+
+func _continue_game() -> void:
+	if saved_session_id.is_empty():
+		connection_status.text = "이어갈 수 있는 저장 세션이 없습니다."
+		if smoke_resume_test:
+			get_tree().quit(1)
+		return
+	session_id = saved_session_id
+	connection_status.text = "저장된 세션을 불러오는 중…"
+	new_game_button.disabled = true
+	continue_button.disabled = true
+	_request_json("resume", HTTPClient.METHOD_GET, "/api/v1/sessions/%s" % session_id)
 
 
 func _submit_dialogue() -> void:
@@ -219,6 +250,7 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 
 	match request_kind:
 		"start": _show_session(payload)
+		"resume": _show_resume(payload)
 		"dialogue": _show_dialogue(payload)
 		"choices": _show_choices(payload)
 		"choice": _show_choice_result(payload)
@@ -227,10 +259,38 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 
 func _show_session(payload: Dictionary) -> void:
 	session_id = str(payload.get("sessionId", ""))
+	_save_session_reference(session_id)
 	_show_act(payload)
 
 
-func _show_act(payload: Dictionary, transition_feedback := "") -> void:
+func _show_resume(payload: Dictionary) -> void:
+	session_id = str(payload.get("sessionId", ""))
+	_save_session_reference(session_id)
+	var phase := str(payload.get("phase", ""))
+	if phase == "Completed" and payload.get("ending") is Dictionary:
+		_show_ending(payload)
+		return
+	if phase == "AwaitingDialogue":
+		_show_act(payload, "저장된 세션을 복구했습니다.", false)
+		if smoke_resume_test:
+			player_input.text = "복구된 세션에서 계속 진행하겠다."
+			_submit_dialogue()
+		return
+	if phase == "AwaitingChoice":
+		_show_act(payload, "대화 이후의 선택 단계부터 복구했습니다.", false)
+		npc_dialogue.text = payload.get("currentDialogue", "")
+		player_input.hide()
+		send_button.hide()
+		_fetch_choices()
+		return
+	if phase == "AwaitingFarming" and payload.get("nextActivity") is Dictionary:
+		current_act = int(payload.get("act", 3))
+		_show_farming(payload.get("nextActivity"), "농사 시작 직전의 저장 상태를 복구했습니다.")
+		return
+	_show_error("복구할 수 없는 세션 단계입니다: %s" % phase)
+
+
+func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := true) -> void:
 	current_act = int(payload.get("act", 1))
 	var scene: Dictionary = payload.get("scene", {})
 	current_npc_id = str(scene.get("npcId", ""))
@@ -252,7 +312,12 @@ func _show_act(payload: Dictionary, transition_feedback := "") -> void:
 	player_input.editable = true
 	send_button.disabled = false
 	new_game_button.disabled = false
-	if smoke_test:
+	continue_button.disabled = false
+	if smoke_save_dialogue_test:
+		print("MOCK_SESSION_SAVE_DIALOGUE_READY: %s" % session_id)
+		get_tree().quit()
+		return
+	if smoke_test and auto_advance:
 		match current_act:
 			1: player_input.text = "주민들이 다치지 않는 방법부터 찾아보자."
 			2: player_input.text = "징후를 먼저 계산하고 실행할 수 있는 계획을 세우자."
@@ -270,6 +335,10 @@ func _show_dialogue(payload: Dictionary) -> void:
 
 func _show_choices(payload: Dictionary) -> void:
 	choice_ids.clear()
+	if smoke_save_choice_test:
+		print("MOCK_SESSION_SAVE_CHOICE_READY: %s" % session_id)
+		get_tree().quit()
+		return
 	var server_choices: Array = payload.get("choices", [])
 	var time_limit_value: Variant = payload.get("timeLimitSeconds")
 	var time_limit := 0 if time_limit_value == null else int(time_limit_value)
@@ -352,6 +421,10 @@ func _show_farming(payload: Dictionary, transition_feedback: String) -> void:
 		method_buttons[index].button_pressed = index == 0
 	farming_finish_button.disabled = false
 	_update_farming_progress()
+	if smoke_save_test:
+		print("MOCK_SESSION_SAVE_READY: %s" % session_id)
+		get_tree().quit()
+		return
 	if smoke_test:
 		for index in obstacle_buttons.size(): _remove_obstacle(index)
 		for index in 3: _plant_seed(index)
@@ -432,6 +505,10 @@ func _show_ending(payload: Dictionary) -> void:
 	final_choice_timer.stop()
 	ending_screen.show()
 	if smoke_test:
+		if smoke_resume_test:
+			print("MOCK_SESSION_RESUME_OK: %s" % JSON.stringify(payload))
+			get_tree().quit()
+			return
 		smoke_runs += 1
 		if smoke_runs == 1:
 			call_deferred("_start_new_game")
@@ -444,6 +521,7 @@ func _show_error(message: String) -> void:
 	connection_status.text = message
 	feedback.text = message
 	new_game_button.disabled = false
+	continue_button.disabled = saved_session_id.is_empty()
 	send_button.disabled = false
 	player_input.editable = true
 	farming_finish_button.disabled = false
@@ -452,6 +530,33 @@ func _show_error(message: String) -> void:
 	push_warning(message)
 	if smoke_test:
 		get_tree().quit(1)
+
+
+func _session_file_path() -> String:
+	return SMOKE_SESSION_FILE if smoke_test else SESSION_FILE
+
+
+func _load_saved_session_reference() -> void:
+	var config := ConfigFile.new()
+	if config.load(_session_file_path()) == OK:
+		saved_session_id = str(config.get_value("session", "id", ""))
+	continue_button.disabled = saved_session_id.is_empty()
+	continue_button.text = "이어하기" if not saved_session_id.is_empty() else "이어하기 · 저장된 세션 없음"
+	if not saved_session_id.is_empty() and not smoke_test:
+		connection_status.text = "저장된 세션이 있습니다. 서버 실행 후 이어갈 수 있습니다."
+
+
+func _save_session_reference(id: String) -> void:
+	if id.is_empty():
+		return
+	saved_session_id = id
+	var config := ConfigFile.new()
+	config.set_value("session", "id", id)
+	var error := config.save(_session_file_path())
+	if error != OK:
+		push_warning("세션 참조를 저장하지 못했습니다. 오류 코드: %s" % error)
+	continue_button.text = "이어하기"
+	continue_button.disabled = false
 
 
 func _new_uuid() -> String:

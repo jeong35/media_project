@@ -39,8 +39,14 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
     public async Task<SessionSnapshotResponse> GetSessionAsync(Guid sessionId)
     {
         var session = await FindSessionAsync(sessionId);
+        var act = content.GetAct(session.CurrentAct);
         var ending = session.EndingJson is null ? null : JsonSerializer.Deserialize<EndingResponse>(session.EndingJson, JsonOptions);
-        return new SessionSnapshotResponse(session.Id, session.Status, session.CurrentAct, session.CurrentTurn, session.Phase, ToStateResponse(session), ending);
+        var nextActivity = session.Phase == "AwaitingFarming" && act.Farming is not null
+            ? new NextActivityResponse("farming", act.Farming.Title, act.Farming.Instructions)
+            : null;
+        return new SessionSnapshotResponse(session.Id, session.Status, session.CurrentAct, session.CurrentTurn, session.Phase,
+            ToStateResponse(session), ending, act.TimeLabel, ToSceneResponse(act.Scene), act.Scene.OpeningDialogue,
+            act.MockDialogue.Dialogue, nextActivity);
     }
 
     public async Task<DialogueResponse> SubmitDialogueAsync(Guid sessionId, DialogueRequest request)

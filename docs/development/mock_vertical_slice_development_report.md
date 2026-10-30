@@ -72,6 +72,8 @@ Act 1~2 선택 결과는 다음 Act를 반환하며 상태와 적성을 누적�
 
 헤드리스 실행 인자 `--smoke-test`는 네 Act와 성공 엔딩, 재시작을 자동으로 두 회차 실행한다. `--smoke-timeout`은 실제 Godot Timer 신호를 짧게 발생시켜 자동 대피 엔딩과 재시작을 확인한다.
 
+이어하기는 Godot의 `user://` 설정에 마지막 세션 ID만 보관하고, 실제 Act, 단계, 상태, 장면과 엔딩은 서버의 SQLite에서 다시 읽는다. 복구 단계에 따라 대화 화면, 선택지, 농사 시작 또는 완료 엔딩을 표시한다. 농사 중 아직 제출하지 않은 개별 클릭은 서버 상태가 아니므로 농사 시작 지점부터 복구한다.
+
 ## 5. API 흐름
 
 ```text
@@ -88,7 +90,7 @@ POST /api/v1/sessions/{id}/farming
 POST /api/v1/sessions/{id}/choices
     ↓ 최종 상태 판정과 직업 엔딩
 GET  /api/v1/sessions/{id}
-    ↓ 재실행 후 현재 세션 복구
+    ↓ 현재 단계, 장면, 활동과 완료 엔딩 복구
 ```
 
 오류 응답은 `code`, `message`, `retryable`, `requestId`를 가진 공통 JSON 구조를 사용한다.
@@ -110,6 +112,8 @@ GET  /api/v1/sessions/{id}
 - 4개 최종 선택지와 20초 제한시간 응답 확인
 - Godot Timer 시간 초과 시 주민 대피 자동 선택과 재시작을 두 회차 연속 완주
 - 봉인 준비 성공은 `self_saved`, 시간 초과는 `people_evacuated`로 판정
+- 서로 다른 Godot 프로세스 사이에서 대화 전, 선택 대기, 농사 대기 상태 복구
+- 완료 세션을 다시 열어 기존 직업 엔딩 복구
 - 기사단 선택 후 군사 20에서 40으로 변경
 - 봉화 선택 후 봉인 10에서 30으로 변경
 - 대피로 선택 후 정통성 25에서 45로 변경
@@ -160,9 +164,9 @@ GET  /api/v1/sessions/{id}
 
 현재 고정 콘텐츠 기반 Mock 게임은 Act 1부터 최종 엔딩까지 완주된다. 다음 단계에서는 AI를 연결하기 전에 아래 안정성 범위를 보강한다.
 
-1. 이어하기 UI와 세션 복구 동선
-2. 주요 영지 운명 분기별 자동 테스트
-3. 직업 적성 기반 직업 위상 판정 세분화
+1. 주요 영지 운명 분기별 자동 테스트
+2. 직업 적성 기반 직업 위상 판정 세분화
+3. 실제 AI 연결 전 Mock 실패·재시도 동선 보강
 
 전체 Mock 게임이 안정적으로 완주된 뒤에만 OpenAI API Provider와 생성형 후일담을 추가한다.
 
@@ -185,6 +189,8 @@ Godot 실행:
 ```bash
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-test
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-timeout
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-save
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-resume
 ```
 
 PDF 재생성:

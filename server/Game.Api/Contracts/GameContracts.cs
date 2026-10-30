@@ -19,6 +19,8 @@ public sealed record ChoiceResultResponse(string ResultNarration, string Feedbac
 public sealed record FarmingResultRequest(int RemovedObstacles, int CorrectSeeds, string WaterTarget, string Method, string IdempotencyKey);
 public sealed record FarmingResultResponse(int Score, string Feedback, IReadOnlyDictionary<string, int> AppliedChanges,
     GameStateResponse State, NextActResponse? NextAct, EndingResponse? Ending);
-public sealed record SessionSnapshotResponse(Guid SessionId, string Status, int Act, int Turn, string Phase, GameStateResponse State, EndingResponse? Ending);
+public sealed record SessionSnapshotResponse(Guid SessionId, string Status, int Act, int Turn, string Phase,
+    GameStateResponse State, EndingResponse? Ending, string TimeLabel, SceneResponse Scene,
+    string OpeningDialogue, string CurrentDialogue, NextActivityResponse? NextActivity);
 public sealed record ErrorResponse(string Code, string Message, bool Retryable, string RequestId);
 public sealed record ErrorEnvelope(ErrorResponse Error);
