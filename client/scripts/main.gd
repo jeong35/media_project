@@ -11,8 +11,11 @@ const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 @onready var game_screen: VBoxContainer = $Page/GameScreen
 @onready var act_label: Label = $Page/GameScreen/ActLabel
 @onready var narration: Label = $Page/GameScreen/Narration
-@onready var npc_name: Label = $Page/GameScreen/NpcName
-@onready var npc_dialogue: Label = $Page/GameScreen/NpcDialogue
+@onready var npc_name: Label = $Page/GameScreen/NpcStage/DialoguePanel/Content/NpcName
+@onready var npc_dialogue: Label = $Page/GameScreen/NpcStage/DialoguePanel/Content/NpcDialogue
+@onready var npc_initial: Label = $Page/GameScreen/NpcStage/Portrait/Content/Initial
+@onready var npc_emotion: Label = $Page/GameScreen/NpcStage/Portrait/Content/Emotion
+@onready var scene_id_label: Label = $Page/GameScreen/NpcStage/Portrait/Content/SceneId
 @onready var player_input: TextEdit = $Page/GameScreen/PlayerInput
 @onready var send_button: Button = $Page/GameScreen/SendButton
 @onready var feedback: Label = $Page/GameScreen/Feedback
@@ -325,6 +328,9 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 	act_label.text = "ACT %s · %s" % [current_act, payload.get("timeLabel", "")]
 	narration.text = scene.get("narration", "")
 	npc_name.text = scene.get("npcName", "")
+	npc_initial.text = npc_name.text.left(1) if not npc_name.text.is_empty() else "?"
+	npc_emotion.text = _translate_emotion(str(scene.get("npcEmotion", "neutral")))
+	scene_id_label.text = _translate_background(str(scene.get("backgroundId", "unknown")))
 	npc_dialogue.text = payload.get("openingDialogue", "")
 	player_input.placeholder_text = "%s에게 답하세요. (최대 300자)" % npc_name.text
 	feedback.text = transition_feedback
@@ -355,6 +361,7 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 
 func _show_dialogue(payload: Dictionary) -> void:
 	npc_dialogue.text = payload.get("dialogue", "")
+	npc_emotion.text = _translate_emotion(str(payload.get("emotion", "neutral")))
 	var fallback_note := "\n대화 생성에 실패해 준비된 대사를 사용했습니다." if payload.get("fallbackUsed", false) else ""
 	feedback.text = "%s\n%s%s" % [payload.get("feedback", ""), payload.get("careerFeedback", ""), fallback_note]
 	player_input.hide()
@@ -661,6 +668,28 @@ func _translate_ending_tone(tone_id: String) -> String:
 		"unexpected": "의외",
 		"b_grade": "B급"
 	}.get(tone_id, tone_id)
+
+
+func _translate_emotion(emotion_id: String) -> String:
+	return {
+		"neutral": "차분함",
+		"surprised": "놀람",
+		"nervous": "긴장",
+		"urgent": "긴박함",
+		"determined": "결연함",
+		"resolved": "각오",
+		"warm": "다정함",
+		"smiling": "미소"
+	}.get(emotion_id, emotion_id.replace("_", " "))
+
+
+func _translate_background(background_id: String) -> String:
+	return {
+		"study_night": "밤의 영주 집무실",
+		"north_beacon_ruins": "북부 봉화 유적",
+		"community_barley_field": "마력보리 공동밭",
+		"cracked_sky_castle_wall": "균열 아래 성벽"
+	}.get(background_id, background_id.replace("_", " "))
 
 
 func _show_error(message: String) -> void:
