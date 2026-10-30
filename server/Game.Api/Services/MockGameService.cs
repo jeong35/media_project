@@ -12,6 +12,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
     private static readonly string[] TraitIds = ["kind", "ruthless", "persuasive", "observant", "pragmatic", "reckless", "eccentric", "threatening"];
     private static readonly string[] AffinityIds = ["martial", "arcane", "diplomacy", "commerce", "leadership", "craft"];
     private static readonly string[] FailureScenarios = ["none", "transient_once", "invalid_payload", "timeout"];
+    private sealed record FinalChoiceTimerEvent(DateTimeOffset DeadlineUtc);
 
     public async Task<SessionStartResponse> StartSessionAsync(string mode, string failureScenario = "none")
     {
@@ -48,9 +49,12 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var nextActivity = session.Phase == "AwaitingFarming" && act.Farming is not null
             ? new NextActivityResponse("farming", act.Farming.Title, act.Farming.Instructions)
             : null;
+        var farmingProgress = session.Phase == "AwaitingFarming"
+            ? await GetLatestFarmingProgressAsync(sessionId)
+            : null;
         return new SessionSnapshotResponse(session.Id, session.Status, session.CurrentAct, session.CurrentTurn, session.Phase,
             ToStateResponse(session), ending, act.TimeLabel, ToSceneResponse(act.Scene), act.Scene.OpeningDialogue,
-            act.MockDialogue.Dialogue, nextActivity);
+            act.MockDialogue.Dialogue, nextActivity, farmingProgress);
     }
 
     public async Task<DialogueResponse> SubmitDialogueAsync(Guid sessionId, DialogueRequest request)
@@ -91,8 +95,14 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var session = await FindSessionAsync(sessionId);
         if (session.Phase != "AwaitingChoice") throw new GameRuleException("CHOICES_UNAVAILABLE", "아직 선택지를 확인할 수 없습니다.");
         var act = content.GetAct(session.CurrentAct);
+        double? remainingSeconds = null;
+        if (act.ChoiceTimeLimitSeconds is not null)
+        {
+            var timer = await GetFinalChoiceTimerAsync(sessionId, act, true);
+            remainingSeconds = Math.Max(0, (timer!.DeadlineUtc - DateTimeOffset.UtcNow).TotalSeconds);
+        }
         return new ChoicesResponse(act.Choices.Select(choice => new ChoiceOptionResponse(choice.ChoiceId, choice.Label)).ToArray(),
-            act.ChoiceTimeLimitSeconds, act.TimeoutChoiceId);
+            act.ChoiceTimeLimitSeconds, act.TimeoutChoiceId, remainingSeconds);
     }
 
     public async Task<ChoiceResultResponse> SubmitChoiceAsync(Guid sessionId, ChoiceRequest request)
@@ -107,7 +117,17 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         if (session.Phase != "AwaitingChoice") throw new GameRuleException("INVALID_TURN", "현재는 선택지를 제출할 수 없습니다.");
         var choice = act.Choices.SingleOrDefault(candidate => candidate.ChoiceId == request.ChoiceId)
             ?? throw new GameRuleException("INVALID_CHOICE", "허용되지 않은 선택지입니다.");
-        if (request.TimedOut && (act.ChoiceTimeLimitSeconds is null || choice.ChoiceId != act.TimeoutChoiceId))
+        var timedOut = request.TimedOut;
+        if (act.ChoiceTimeLimitSeconds is not null)
+        {
+            var timer = await GetFinalChoiceTimerAsync(sessionId, act, false);
+            if (timer is not null && timer.DeadlineUtc <= DateTimeOffset.UtcNow)
+            {
+                choice = act.Choices.Single(candidate => candidate.ChoiceId == act.TimeoutChoiceId);
+                timedOut = true;
+            }
+        }
+        if (timedOut && (act.ChoiceTimeLimitSeconds is null || choice.ChoiceId != act.TimeoutChoiceId))
             throw new GameRuleException("INVALID_TIMEOUT_CHOICE", "시간 초과 시 지정된 자동 선택지만 제출할 수 있습니다.");
 
         ApplyStateChanges(session, choice.Changes);
@@ -120,7 +140,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         NextActivityResponse? nextActivity = null;
         if (act.FinaleRules is not null)
         {
-            ending = await BuildFinalEndingAsync(session, act, choice, request.TimedOut);
+            ending = await BuildFinalEndingAsync(session, act, choice, timedOut);
             session.Status = "Completed";
             session.Phase = "Completed";
             session.EndingJson = JsonSerializer.Serialize(ending, JsonOptions);
@@ -211,6 +231,32 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         return response;
     }
 
+    public async Task<FarmingProgressResponse> SaveFarmingProgressAsync(Guid sessionId, FarmingProgressRequest request)
+    {
+        ValidateIdempotencyKey(request.IdempotencyKey);
+        var duplicate = await FindExistingResponseAsync<FarmingProgressResponse>(sessionId, request.IdempotencyKey, "FarmingProgressSaved");
+        if (duplicate is not null) return duplicate;
+
+        var session = await FindSessionAsync(sessionId);
+        var act = content.GetAct(session.CurrentAct);
+        var farming = act.Farming ?? throw new GameRuleException("FARMING_UNAVAILABLE", "현재 장면에는 농사 활동이 없습니다.");
+        if (session.Phase != "AwaitingFarming") throw new GameRuleException("INVALID_TURN", "현재는 농사 진행을 저장할 수 없습니다.");
+        ValidateProgressIndexes(request.RemovedObstacleIndexes, 3, "장애물");
+        ValidateProgressIndexes(request.PlantedSeedIndexes, 4, "씨앗");
+        if (!farming.WaterOutcomes.ContainsKey(request.WaterTarget))
+            throw new GameRuleException("INVALID_WATER_TARGET", "허용되지 않은 물 배분 대상입니다.");
+        if (!farming.MethodOutcomes.ContainsKey(request.Method))
+            throw new GameRuleException("INVALID_FARMING_METHOD", "허용되지 않은 작업 방식입니다.");
+
+        var response = new FarmingProgressResponse(request.RemovedObstacleIndexes.Order().ToArray(),
+            request.PlantedSeedIndexes.Order().ToArray(), request.WaterTarget, request.Method);
+        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "FarmingProgressSaved",
+            session.CurrentAct, response, request.IdempotencyKey));
+        session.UpdatedAt = DateTimeOffset.UtcNow;
+        await database.SaveChangesAsync();
+        return response;
+    }
+
     private async Task<GameSession> FindSessionAsync(Guid id) =>
         await database.Sessions.SingleOrDefaultAsync(session => session.Id == id) ?? throw new SessionNotFoundException();
 
@@ -222,6 +268,29 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var gameEvent = await database.GameEvents.SingleOrDefaultAsync(candidate =>
             candidate.SessionId == sessionId && candidate.IdempotencyKey == key && candidate.EventType == eventType);
         return gameEvent is null ? null : JsonSerializer.Deserialize<T>(gameEvent.PayloadJson, JsonOptions);
+    }
+
+    private async Task<FarmingProgressResponse?> GetLatestFarmingProgressAsync(Guid sessionId)
+    {
+        var gameEvent = await database.GameEvents.Where(candidate =>
+                candidate.SessionId == sessionId && candidate.EventType == "FarmingProgressSaved")
+            .OrderByDescending(candidate => candidate.Sequence)
+            .FirstOrDefaultAsync();
+        return gameEvent is null ? null : JsonSerializer.Deserialize<FarmingProgressResponse>(gameEvent.PayloadJson, JsonOptions);
+    }
+
+    private async Task<FinalChoiceTimerEvent?> GetFinalChoiceTimerAsync(Guid sessionId, MockActContent act, bool startIfMissing)
+    {
+        var gameEvent = await database.GameEvents.SingleOrDefaultAsync(candidate =>
+            candidate.SessionId == sessionId && candidate.EventType == "FinalChoiceTimerStarted");
+        if (gameEvent is not null)
+            return JsonSerializer.Deserialize<FinalChoiceTimerEvent>(gameEvent.PayloadJson, JsonOptions);
+        if (!startIfMissing || act.ChoiceTimeLimitSeconds is null) return null;
+
+        var timer = new FinalChoiceTimerEvent(DateTimeOffset.UtcNow.AddSeconds(act.ChoiceTimeLimitSeconds.Value));
+        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "FinalChoiceTimerStarted", act.Act, timer));
+        await database.SaveChangesAsync();
+        return timer;
     }
 
     private static SceneResponse ToSceneResponse(SceneContent scene) =>
@@ -239,6 +308,12 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
     private static void ValidateIdempotencyKey(string key)
     {
         if (!Guid.TryParse(key, out _)) throw new GameRuleException("INVALID_IDEMPOTENCY_KEY", "idempotencyKey는 UUID 형식이어야 합니다.");
+    }
+
+    private static void ValidateProgressIndexes(IReadOnlyList<int> indexes, int count, string label)
+    {
+        if (indexes.Count != indexes.Distinct().Count() || indexes.Any(index => index < 0 || index >= count))
+            throw new GameRuleException("INVALID_FARMING_PROGRESS", $"{label} 진행 정보가 허용 범위를 벗어났습니다.");
     }
 
     private static string GetFailureScenario(string mode) =>

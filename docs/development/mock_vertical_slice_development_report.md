@@ -72,7 +72,7 @@ Act 1~2 선택 결과는 다음 Act를 반환하며 상태와 적성을 누적�
 
 헤드리스 실행 인자 `--smoke-test`는 네 Act와 성공 엔딩, 재시작을 자동으로 두 회차 실행한다. `--smoke-timeout`은 실제 Godot Timer 신호를 짧게 발생시켜 자동 대피 엔딩과 재시작을 확인한다.
 
-이어하기는 Godot의 `user://` 설정에 마지막 세션 ID만 보관하고, 실제 Act, 단계, 상태, 장면과 엔딩은 서버의 SQLite에서 다시 읽는다. 복구 단계에 따라 대화 화면, 선택지, 농사 시작 또는 완료 엔딩을 표시한다. 농사 중 아직 제출하지 않은 개별 클릭은 서버 상태가 아니므로 농사 시작 지점부터 복구한다.
+이어하기는 Godot의 `user://` 설정에 마지막 세션 ID만 보관하고, 실제 Act, 단계, 상태, 장면과 엔딩은 서버의 SQLite에서 다시 읽는다. 복구 단계에 따라 대화 화면, 선택지, 농사 진행 상태 또는 완료 엔딩을 표시한다. 농사 중 제거한 장애물과 심은 씨앗의 인덱스, 물 배분 대상과 작업 방식도 이벤트 체크포인트로 저장해 마지막 조작 상태를 복원한다.
 
 ## 5. API 흐름
 
@@ -85,8 +85,12 @@ GET  /api/v1/sessions/{id}/choices
     ↓ 선택지 3개
 POST /api/v1/sessions/{id}/choices
     ↓ 적용 변화, 다음 Act 또는 농사 활동
+POST /api/v1/sessions/{id}/farming-progress
+    ↓ 농사 조작 체크포인트 저장
 POST /api/v1/sessions/{id}/farming
     ↓ 서버 점수·보상 계산, Act 4 장면
+GET  /api/v1/sessions/{id}/choices
+    ↓ 서버가 저장한 Act 4 남은 제한시간
 POST /api/v1/sessions/{id}/choices
     ↓ 최종 상태 판정과 직업 엔딩
 GET  /api/v1/sessions/{id}
@@ -145,6 +149,8 @@ GET  /api/v1/sessions/{id}
 | 일시 오류 재시도 | 2회째 정상 응답 | 2회째 정상 응답 | PASS |
 | 잘못된 대화 JSON | 고정 대사 폴백 후 진행 | 고정 대사 폴백 후 진행 | PASS |
 | 대화 생성 타임아웃 | 고정 대사 폴백 후 진행 | 고정 대사 폴백 후 진행 | PASS |
+| 농사 중간 복구 | 조작 상태와 선택 복원 | 장애물·씨앗·물·방식 복원 | PASS |
+| Act 4 타이머 복구 | 재접속해도 기존 마감 유지 | 만료 후 자동 주민 대피 | PASS |
 
 ### 6.5 직업 적성 기반 엔딩
 
@@ -162,6 +168,12 @@ GET  /api/v1/sessions/{id}
 ### 6.6 대화 생성 실패 복구
 
 대화 생성 경계를 별도 서비스로 분리했다. 일시 오류는 같은 요청 안에서 1회 재시도하고, 잘못된 JSON이나 타임아웃이 두 번 발생하면 Act별 고정 대사로 전환한다. 세 경우 모두 Godot에서 선택, 엔딩과 재시작까지 완주했다. 이 구조는 이후 Mock Provider를 OpenAI Provider로 교체해도 게임 규칙과 진행 흐름을 유지하기 위한 것이다.
+
+### 6.7 진행 중 체크포인트 복구
+
+농사 조작은 제출 전에도 전용 API로 직렬 저장한다. 별도 테이블을 추가하는 대신 기존 append-only `GameEvent`에 체크포인트를 기록해 이전 SQLite 파일과의 호환성을 유지했다. Act 4는 최초 선택지 조회 시 서버가 절대 마감 시각을 한 번만 저장하고 이후 남은 시간을 계산한다. 따라서 앱을 다시 열어도 20초가 초기화되지 않으며, 마감 뒤 도착한 선택도 서버가 주민 대피로 교정한다.
+
+자동 테스트 14개와 실제 Godot 재실행 스모크 테스트를 통과했다. 농사 재실행에서는 장애물 `[0, 2]`, 씨앗 `[0, 3]`, 물 `market`, 방식 `tools`가 복원됐고, 제한시간 종료 뒤 재실행에서는 남은 시간 `0.00`과 `people_evacuated` 엔딩을 확인했다.
 
 ## 7. 문제와 해결
 
@@ -194,15 +206,15 @@ GET  /api/v1/sessions/{id}
 - SQLite 기반 상태 및 이벤트 저장
 - 중복 요청과 오류 계약을 고려한 API 안정성
 - 실제 Godot 클라이언트를 포함한 종단간 자동 검증
+- 진행 중 체크포인트와 서버 권위 제한시간 복구
 - 의존성 취약점 탐지와 해결
 
 ## 9. 한계와 다음 작업
 
 현재 고정 콘텐츠 기반 Mock 게임은 Act 1부터 최종 엔딩까지 완주된다. 다음 단계에서는 AI를 연결하기 전에 아래 안정성 범위를 보강한다.
 
-1. 농사 도중 상태와 Act 4 남은 시간의 세부 복구 정책 확정
-2. 전설 위상과 의외·B급 톤을 해금할 추가 업적 설계
-3. Mock과 같은 계약을 사용하는 OpenAI Provider 경계 설계
+1. 전설 위상과 의외·B급 톤을 해금할 추가 업적 설계
+2. Mock과 같은 계약을 사용하는 OpenAI Provider 경계 설계
 
 전체 Mock 게임이 안정적으로 완주된 뒤에만 OpenAI API Provider와 생성형 후일담을 추가한다.
 
@@ -227,6 +239,9 @@ Godot 실행:
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-timeout
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-save
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-resume
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-save-farming-progress
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-save-final-timer
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-resume-timer
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-dialogue-transient
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-dialogue-invalid
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-dialogue-timeout

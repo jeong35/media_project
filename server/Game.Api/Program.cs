@@ -47,6 +47,8 @@ app.MapPost("/api/v1/sessions/{sessionId:guid}/choices", async (Guid sessionId, 
     Results.Ok(await game.SubmitChoiceAsync(sessionId, request)));
 app.MapPost("/api/v1/sessions/{sessionId:guid}/farming", async (Guid sessionId, FarmingResultRequest request, MockGameService game) =>
     Results.Ok(await game.SubmitFarmingAsync(sessionId, request)));
+app.MapPost("/api/v1/sessions/{sessionId:guid}/farming-progress", async (Guid sessionId, FarmingProgressRequest request, MockGameService game) =>
+    Results.Ok(await game.SaveFarmingProgressAsync(sessionId, request)));
 
 app.Run();
 public partial class Program;

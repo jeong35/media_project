@@ -32,6 +32,8 @@ results.Add(RunLegacyEndingCompatibility());
 results.Add(await RunDialogueFailureScenarioAsync(content, "transient_once", false, "mock"));
 results.Add(await RunDialogueFailureScenarioAsync(content, "invalid_payload", true, "fixed_fallback"));
 results.Add(await RunDialogueFailureScenarioAsync(content, "timeout", true, "fixed_fallback"));
+results.Add(await RunFarmingProgressRecoveryAsync(content));
+results.Add(await RunFinalTimerRecoveryAsync(content));
 
 Console.WriteLine("| 테스트 | 기대 결과 | 실제 결과 | 최종 상태 | 판정 |");
 Console.WriteLine("| --- | --- | --- | --- | --- |");
@@ -176,6 +178,85 @@ static async Task<TestResult> RunDialogueFailureScenarioAsync(MockGameContent co
     {
         return new TestResult($"대화 실패 복구-{scenario}", expectedSource, error.GetType().Name, "-", false, error.Message);
     }
+}
+
+static async Task<TestResult> RunFarmingProgressRecoveryAsync(MockGameContent content)
+{
+    const string expected = "장애물 0,2/씨앗 0,3/market/tools";
+    try
+    {
+        await using var fixture = await GameFixture.CreateAsync(content);
+        var sessionId = await AdvanceToFarmingAsync(fixture.Service);
+        var key = NewKey();
+        await fixture.Service.SaveFarmingProgressAsync(sessionId,
+            new FarmingProgressRequest([0, 2], [0, 3], "market", "tools", key));
+        await fixture.Service.SaveFarmingProgressAsync(sessionId,
+            new FarmingProgressRequest([0, 2], [0, 3], "market", "tools", key));
+        fixture.Database.ChangeTracker.Clear();
+
+        var snapshot = await fixture.Service.GetSessionAsync(sessionId);
+        var progress = snapshot.FarmingProgress;
+        var actual = progress is null ? "missing" :
+            $"장애물 {string.Join(',', progress.RemovedObstacleIndexes)}/씨앗 {string.Join(',', progress.PlantedSeedIndexes)}/{progress.WaterTarget}/{progress.Method}";
+        var checkpointCount = await fixture.Database.GameEvents.CountAsync(gameEvent =>
+            gameEvent.SessionId == sessionId && gameEvent.EventType == "FarmingProgressSaved");
+        var passed = actual == expected && snapshot.Phase == "AwaitingFarming" && checkpointCount == 1;
+        return new TestResult("농사 중간 복구", expected, actual, $"체크포인트 {checkpointCount}개", passed,
+            passed ? null : "농사 진행 체크포인트가 정확히 복구되지 않았습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("농사 중간 복구", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunFinalTimerRecoveryAsync(MockGameContent content)
+{
+    const string expected = "남은 시간 유지/만료 시 people_evacuated";
+    try
+    {
+        await using var fixture = await GameFixture.CreateAsync(content);
+        var scenario = new FateScenario("", "prepare_evacuation", "research_ward", "farm_with_residents",
+            "community", "manual", "final_ward", false, "", "", "", "");
+        var progress = await AdvanceToFinalChoiceAsync(fixture.Service, scenario);
+        var recoveredChoices = await fixture.Service.GetChoicesAsync(progress.SessionId);
+        var timerPersisted = recoveredChoices.RemainingSeconds is > 0 and < 20;
+
+        var timerEvent = await fixture.Database.GameEvents.SingleAsync(gameEvent =>
+            gameEvent.SessionId == progress.SessionId && gameEvent.EventType == "FinalChoiceTimerStarted");
+        timerEvent.PayloadJson = JsonSerializer.Serialize(new { deadlineUtc = DateTimeOffset.UtcNow.AddSeconds(-1) },
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        await fixture.Database.SaveChangesAsync();
+        fixture.Database.ChangeTracker.Clear();
+
+        var result = await fixture.Service.SubmitChoiceAsync(progress.SessionId,
+            new ChoiceRequest("final_ward", NewKey(), false));
+        var actual = $"남은 시간 {(timerPersisted ? "유지" : "초기화")}/만료 시 {result.Ending?.TerritoryFateId}";
+        var passed = timerPersisted && result.Ending?.TerritoryFateId == "people_evacuated"
+            && result.Ending.Records.First().Contains("자동으로");
+        return new TestResult("Act 4 타이머 복구", expected, actual,
+            $"복구 잔여 {recoveredChoices.RemainingSeconds:F2}초", passed,
+            passed ? null : "제한시간이 초기화되거나 만료 후 다른 선택이 적용됐습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("Act 4 타이머 복구", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<Guid> AdvanceToFarmingAsync(MockGameService game)
+{
+    var start = await game.StartSessionAsync("mock");
+    await game.SubmitDialogueAsync(start.SessionId, new DialogueRequest(start.Scene.NpcId, "첫 결정을 내린다.", NewKey()));
+    var act1 = await game.SubmitChoiceAsync(start.SessionId, new ChoiceRequest("prepare_evacuation", NewKey()));
+    await game.SubmitDialogueAsync(start.SessionId,
+        new DialogueRequest(act1.NextAct!.Scene.NpcId, "균열 대응책을 정한다.", NewKey()));
+    var act2 = await game.SubmitChoiceAsync(start.SessionId, new ChoiceRequest("research_ward", NewKey()));
+    await game.SubmitDialogueAsync(start.SessionId,
+        new DialogueRequest(act2.NextAct!.Scene.NpcId, "주민의 밭을 돕는다.", NewKey()));
+    var act3 = await game.SubmitChoiceAsync(start.SessionId, new ChoiceRequest("farm_with_residents", NewKey()));
+    Assert(act3.NextActivity?.ActivityId == "farming", "농사 활동으로 전환되지 않았습니다.");
+    return start.SessionId;
 }
 
 static async Task<FinalChoiceProgress> AdvanceToFinalChoiceAsync(MockGameService game, FateScenario scenario)

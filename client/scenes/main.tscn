@@ -381,5 +381,8 @@ text = "다시 시작"
 [node name="HealthRequest" type="HTTPRequest" parent="."]
 timeout = 8.0
 
+[node name="CheckpointRequest" type="HTTPRequest" parent="."]
+timeout = 8.0
+
 [node name="FinalChoiceTimer" type="Timer" parent="."]
 one_shot = true

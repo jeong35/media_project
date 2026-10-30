@@ -70,6 +70,7 @@ const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 @onready var share_line: Label = $Page/EndingScreen/ShareLine
 @onready var restart_button: Button = $Page/EndingScreen/RestartButton
 @onready var http_request: HTTPRequest = $HealthRequest
+@onready var checkpoint_request: HTTPRequest = $CheckpointRequest
 @onready var final_choice_timer: Timer = $FinalChoiceTimer
 
 var session_id := ""
@@ -79,6 +80,8 @@ var request_kind := ""
 var choice_ids: Array[String] = []
 var removed_obstacles := 0
 var correct_seeds := 0
+var removed_obstacle_indexes: Array[int] = []
+var planted_seed_indexes: Array[int] = []
 var water_target := "community"
 var farming_method := "manual"
 var smoke_test := false
@@ -87,11 +90,17 @@ var smoke_save_test := false
 var smoke_save_dialogue_test := false
 var smoke_save_choice_test := false
 var smoke_resume_test := false
+var smoke_save_farming_progress_test := false
+var smoke_save_final_timer_test := false
+var smoke_resume_timer_test := false
 var smoke_runs := 0
 var final_time_limit := 0.0
 var timeout_choice_id := ""
 var saved_session_id := ""
 var mock_failure_scenario := "none"
+var checkpoint_request_active := false
+var checkpoint_dirty := false
+var quit_after_checkpoint := false
 
 
 func _ready() -> void:
@@ -113,13 +122,17 @@ func _ready() -> void:
 		method_buttons[index].pressed.connect(_select_method.bind(index))
 	farming_finish_button.pressed.connect(_submit_farming)
 	http_request.request_completed.connect(_on_request_completed)
+	checkpoint_request.request_completed.connect(_on_checkpoint_completed)
 	final_choice_timer.timeout.connect(_on_final_choice_timeout)
 	var arguments := OS.get_cmdline_user_args()
 	smoke_timeout_test = "--smoke-timeout" in arguments
 	smoke_save_dialogue_test = "--smoke-save-dialogue" in arguments
 	smoke_save_choice_test = "--smoke-save-choice" in arguments
 	smoke_save_test = "--smoke-save" in arguments or smoke_save_dialogue_test or smoke_save_choice_test
-	smoke_resume_test = "--smoke-resume" in arguments
+	smoke_save_farming_progress_test = "--smoke-save-farming-progress" in arguments
+	smoke_save_final_timer_test = "--smoke-save-final-timer" in arguments
+	smoke_resume_timer_test = "--smoke-resume-timer" in arguments
+	smoke_resume_test = "--smoke-resume" in arguments or smoke_resume_timer_test
 	if "--smoke-dialogue-transient" in arguments:
 		mock_failure_scenario = "transient_once"
 	elif "--smoke-dialogue-invalid" in arguments:
@@ -127,6 +140,7 @@ func _ready() -> void:
 	elif "--smoke-dialogue-timeout" in arguments:
 		mock_failure_scenario = "timeout"
 	smoke_test = "--smoke-test" in arguments or smoke_timeout_test or smoke_save_test or smoke_resume_test \
+		or smoke_save_farming_progress_test or smoke_save_final_timer_test \
 		or mock_failure_scenario != "none"
 	_load_saved_session_reference()
 	if smoke_resume_test:
@@ -297,7 +311,8 @@ func _show_resume(payload: Dictionary) -> void:
 		return
 	if phase == "AwaitingFarming" and payload.get("nextActivity") is Dictionary:
 		current_act = int(payload.get("act", 3))
-		_show_farming(payload.get("nextActivity"), "농사 시작 직전의 저장 상태를 복구했습니다.")
+		var progress: Dictionary = payload.get("farmingProgress", {}) if payload.get("farmingProgress") is Dictionary else {}
+		_show_farming(payload.get("nextActivity"), "저장된 농사 진행 상태를 복구했습니다.", progress)
 		return
 	_show_error("복구할 수 없는 세션 단계입니다: %s" % phase)
 
@@ -356,7 +371,9 @@ func _show_choices(payload: Dictionary) -> void:
 	var time_limit_value: Variant = payload.get("timeLimitSeconds")
 	var time_limit := 0 if time_limit_value == null else int(time_limit_value)
 	if time_limit > 0:
-		_show_final_choices(server_choices, time_limit, str(payload.get("timeoutChoiceId", "")))
+		var remaining_value: Variant = payload.get("remainingSeconds")
+		var remaining := float(time_limit) if remaining_value == null else float(remaining_value)
+		_show_final_choices(server_choices, time_limit, str(payload.get("timeoutChoiceId", "")), remaining)
 		return
 	for index in choice_buttons.size():
 		choice_buttons[index].disabled = false
@@ -371,7 +388,7 @@ func _show_choices(payload: Dictionary) -> void:
 		_submit_choice(smoke_choice)
 
 
-func _show_final_choices(server_choices: Array, time_limit: int, automatic_choice_id: String) -> void:
+func _show_final_choices(server_choices: Array, time_limit: int, automatic_choice_id: String, remaining_seconds: float) -> void:
 	game_screen.hide()
 	farming_screen.hide()
 	ending_screen.hide()
@@ -387,11 +404,20 @@ func _show_final_choices(server_choices: Array, time_limit: int, automatic_choic
 			var choice: Dictionary = server_choices[index]
 			choice_ids.append(str(choice.get("choiceId", "")))
 			final_choice_buttons[index].text = choice.get("label", "")
-	final_time_limit = 0.2 if smoke_timeout_test else float(time_limit)
-	final_timer_bar.max_value = final_time_limit
+	final_time_limit = 0.2 if smoke_timeout_test else maxf(0.0, remaining_seconds)
+	final_timer_bar.max_value = float(time_limit)
 	final_timer_bar.value = final_time_limit
 	final_timer_label.text = "결정까지 %.1f초" % final_time_limit
-	final_choice_timer.start(final_time_limit)
+	if final_time_limit <= 0.0:
+		call_deferred("_on_final_choice_timeout")
+	else:
+		final_choice_timer.start(final_time_limit)
+	if smoke_save_final_timer_test:
+		print("MOCK_FINAL_TIMER_SAVE_READY: %s" % session_id)
+		get_tree().quit()
+		return
+	if smoke_resume_timer_test:
+		print("MOCK_FINAL_TIMER_RESUMED: %.2f" % final_time_limit)
 	if smoke_test and not smoke_timeout_test:
 		_submit_final_choice(1)
 
@@ -409,7 +435,7 @@ func _show_choice_result(payload: Dictionary) -> void:
 	_show_ending(payload)
 
 
-func _show_farming(payload: Dictionary, transition_feedback: String) -> void:
+func _show_farming(payload: Dictionary, transition_feedback: String, saved_progress: Dictionary = {}) -> void:
 	game_screen.hide()
 	ending_screen.hide()
 	farming_screen.show()
@@ -418,6 +444,8 @@ func _show_farming(payload: Dictionary, transition_feedback: String) -> void:
 	farming_feedback.text = transition_feedback
 	removed_obstacles = 0
 	correct_seeds = 0
+	removed_obstacle_indexes.clear()
+	planted_seed_indexes.clear()
 	water_target = "community"
 	farming_method = "manual"
 	var obstacle_labels := ["돌 치우기", "잡초 뽑기", "돌 치우기"]
@@ -432,12 +460,43 @@ func _show_farming(payload: Dictionary, transition_feedback: String) -> void:
 		water_buttons[index].button_pressed = index == 0
 	for index in method_buttons.size():
 		method_buttons[index].button_pressed = index == 0
+	for value in saved_progress.get("removedObstacleIndexes", []):
+		var index := int(value)
+		if index >= 0 and index < obstacle_buttons.size():
+			removed_obstacle_indexes.append(index)
+			obstacle_buttons[index].disabled = true
+			obstacle_buttons[index].text = "정리 완료"
+	for value in saved_progress.get("plantedSeedIndexes", []):
+		var index := int(value)
+		if index >= 0 and index < seed_buttons.size():
+			planted_seed_indexes.append(index)
+			seed_buttons[index].disabled = true
+			seed_buttons[index].text = "씨앗 배치 완료" if index < 3 else "싹트기 어려운 땅"
+	removed_obstacles = removed_obstacle_indexes.size()
+	correct_seeds = planted_seed_indexes.filter(func(index: int) -> bool: return index < 3).size()
+	var saved_water := str(saved_progress.get("waterTarget", "community"))
+	var saved_method := str(saved_progress.get("method", "manual"))
+	var water_index := ["community", "ward", "market"].find(saved_water)
+	var method_index := ["manual", "magic", "tools"].find(saved_method)
+	_select_water(0 if water_index < 0 else water_index, false)
+	_select_method(0 if method_index < 0 else method_index, false)
 	farming_finish_button.disabled = false
 	_update_farming_progress()
 	if smoke_save_test:
 		print("MOCK_SESSION_SAVE_READY: %s" % session_id)
 		get_tree().quit()
 		return
+	if smoke_save_farming_progress_test:
+		quit_after_checkpoint = true
+		_remove_obstacle(0)
+		_remove_obstacle(2)
+		_plant_seed(0)
+		_plant_seed(3)
+		_select_water(2)
+		_select_method(2)
+		return
+	if smoke_resume_test and not saved_progress.is_empty():
+		print("MOCK_FARMING_PROGRESS_RESUMED: %s" % JSON.stringify(saved_progress))
 	if smoke_test:
 		for index in obstacle_buttons.size(): _remove_obstacle(index)
 		for index in 3: _plant_seed(index)
@@ -450,33 +509,41 @@ func _remove_obstacle(index: int) -> void:
 	obstacle_buttons[index].disabled = true
 	obstacle_buttons[index].text = "정리 완료"
 	removed_obstacles += 1
+	removed_obstacle_indexes.append(index)
 	_update_farming_progress()
+	_queue_farming_checkpoint()
 
 
 func _plant_seed(index: int) -> void:
 	if seed_buttons[index].disabled:
 		return
 	seed_buttons[index].disabled = true
+	planted_seed_indexes.append(index)
 	if index < 3:
 		seed_buttons[index].text = "씨앗 배치 완료"
 		correct_seeds += 1
 	else:
 		seed_buttons[index].text = "싹트기 어려운 땅"
 	_update_farming_progress()
+	_queue_farming_checkpoint()
 
 
-func _select_water(index: int) -> void:
+func _select_water(index: int, save_checkpoint := true) -> void:
 	var targets := ["community", "ward", "market"]
 	water_target = targets[index]
 	for button_index in water_buttons.size():
 		water_buttons[button_index].button_pressed = button_index == index
+	if save_checkpoint:
+		_queue_farming_checkpoint()
 
 
-func _select_method(index: int) -> void:
+func _select_method(index: int, save_checkpoint := true) -> void:
 	var methods := ["manual", "magic", "tools"]
 	farming_method = methods[index]
 	for button_index in method_buttons.size():
 		method_buttons[button_index].button_pressed = button_index == index
+	if save_checkpoint:
+		_queue_farming_checkpoint()
 
 
 func _update_farming_progress() -> void:
@@ -484,6 +551,10 @@ func _update_farming_progress() -> void:
 
 
 func _submit_farming() -> void:
+	checkpoint_dirty = false
+	if checkpoint_request_active:
+		checkpoint_request.cancel_request()
+		checkpoint_request_active = false
 	farming_finish_button.disabled = true
 	farming_feedback.text = "농사 결과를 계산하고 있습니다…"
 	_request_json("farming", HTTPClient.METHOD_POST, "/api/v1/sessions/%s/farming" % session_id, {
@@ -493,6 +564,43 @@ func _submit_farming() -> void:
 		"method": farming_method,
 		"idempotencyKey": _new_uuid()
 	})
+
+
+func _queue_farming_checkpoint() -> void:
+	if session_id.is_empty():
+		return
+	checkpoint_dirty = true
+	call_deferred("_flush_farming_checkpoint")
+
+
+func _flush_farming_checkpoint() -> void:
+	if checkpoint_request_active or not checkpoint_dirty:
+		return
+	checkpoint_dirty = false
+	checkpoint_request_active = true
+	var payload := {
+		"removedObstacleIndexes": removed_obstacle_indexes,
+		"plantedSeedIndexes": planted_seed_indexes,
+		"waterTarget": water_target,
+		"method": farming_method,
+		"idempotencyKey": _new_uuid()
+	}
+	var error := checkpoint_request.request(API_BASE + "/api/v1/sessions/%s/farming-progress" % session_id,
+		PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST, JSON.stringify(payload))
+	if error != OK:
+		checkpoint_request_active = false
+		push_warning("농사 진행 상태 저장을 시작하지 못했습니다. 오류 코드: %s" % error)
+
+
+func _on_checkpoint_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+	checkpoint_request_active = false
+	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
+		push_warning("농사 진행 상태를 서버에 저장하지 못했습니다.")
+	if checkpoint_dirty:
+		call_deferred("_flush_farming_checkpoint")
+	elif quit_after_checkpoint:
+		print("MOCK_FARMING_PROGRESS_SAVE_READY: %s" % session_id)
+		get_tree().quit()
 
 
 func _show_farming_result(payload: Dictionary) -> void:

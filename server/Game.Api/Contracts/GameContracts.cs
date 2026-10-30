@@ -9,7 +9,8 @@ public sealed record DialogueResponse(string Dialogue, string Emotion, string Fe
     string CareerFeedback, int DialogueRemaining, bool ChoicesAvailable, string ResponseSource = "mock",
     bool FallbackUsed = false, int AttemptCount = 1);
 public sealed record ChoiceOptionResponse(string ChoiceId, string Label);
-public sealed record ChoicesResponse(IReadOnlyList<ChoiceOptionResponse> Choices, int? TimeLimitSeconds = null, string? TimeoutChoiceId = null);
+public sealed record ChoicesResponse(IReadOnlyList<ChoiceOptionResponse> Choices, int? TimeLimitSeconds = null,
+    string? TimeoutChoiceId = null, double? RemainingSeconds = null);
 public sealed record ChoiceRequest(string ChoiceId, string IdempotencyKey, bool TimedOut = false);
 public sealed record GameStateResponse(int Military, int Treasury, int Legitimacy, int Ward);
 public sealed record CareerAffinityResponse(string AffinityId, int Score, string Evidence);
@@ -22,10 +23,15 @@ public sealed record NextActivityResponse(string ActivityId, string Title, strin
 public sealed record ChoiceResultResponse(string ResultNarration, string Feedback, IReadOnlyDictionary<string, int> AppliedChanges,
     GameStateResponse State, NextActResponse? NextAct, NextActivityResponse? NextActivity, EndingResponse? Ending);
 public sealed record FarmingResultRequest(int RemovedObstacles, int CorrectSeeds, string WaterTarget, string Method, string IdempotencyKey);
+public sealed record FarmingProgressRequest(IReadOnlyList<int> RemovedObstacleIndexes, IReadOnlyList<int> PlantedSeedIndexes,
+    string WaterTarget, string Method, string IdempotencyKey);
+public sealed record FarmingProgressResponse(IReadOnlyList<int> RemovedObstacleIndexes, IReadOnlyList<int> PlantedSeedIndexes,
+    string WaterTarget, string Method);
 public sealed record FarmingResultResponse(int Score, string Feedback, IReadOnlyDictionary<string, int> AppliedChanges,
     GameStateResponse State, NextActResponse? NextAct, EndingResponse? Ending);
 public sealed record SessionSnapshotResponse(Guid SessionId, string Status, int Act, int Turn, string Phase,
     GameStateResponse State, EndingResponse? Ending, string TimeLabel, SceneResponse Scene,
-    string OpeningDialogue, string CurrentDialogue, NextActivityResponse? NextActivity);
+    string OpeningDialogue, string CurrentDialogue, NextActivityResponse? NextActivity,
+    FarmingProgressResponse? FarmingProgress = null);
 public sealed record ErrorResponse(string Code, string Message, bool Retryable, string RequestId);
 public sealed record ErrorEnvelope(ErrorResponse Error);
