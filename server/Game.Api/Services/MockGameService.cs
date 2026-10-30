@@ -6,22 +6,26 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Game.Api.Services;
 
-public sealed class MockGameService(GameDbContext database, MockGameContent content)
+public sealed class MockGameService(GameDbContext database, MockGameContent content, DialogueGenerationService dialogueGeneration)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] TraitIds = ["kind", "ruthless", "persuasive", "observant", "pragmatic", "reckless", "eccentric", "threatening"];
     private static readonly string[] AffinityIds = ["martial", "arcane", "diplomacy", "commerce", "leadership", "craft"];
+    private static readonly string[] FailureScenarios = ["none", "transient_once", "invalid_payload", "timeout"];
 
-    public async Task<SessionStartResponse> StartSessionAsync(string mode)
+    public async Task<SessionStartResponse> StartSessionAsync(string mode, string failureScenario = "none")
     {
         if (!string.Equals(mode, "mock", StringComparison.OrdinalIgnoreCase))
             throw new GameRuleException("UNSUPPORTED_MODE", "현재 세로 슬라이스는 Mock 모드만 지원합니다.");
+        if (!FailureScenarios.Contains(failureScenario))
+            throw new GameRuleException("INVALID_FAILURE_SCENARIO", "허용되지 않은 Mock 실패 시나리오입니다.");
 
         var act = content.GetAct(1);
         var now = DateTimeOffset.UtcNow;
         var session = new GameSession
         {
-            Id = Guid.NewGuid(), CreatedAt = now, UpdatedAt = now, Mode = "Mock",
+            Id = Guid.NewGuid(), CreatedAt = now, UpdatedAt = now,
+            Mode = failureScenario == "none" ? "Mock" : $"Mock:{failureScenario}",
             Military = content.InitialState.Military, Treasury = content.InitialState.Treasury,
             Legitimacy = content.InitialState.Legitimacy, Ward = content.InitialState.Ward
         };
@@ -29,7 +33,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         database.NpcStates.Add(new NpcState { SessionId = session.Id, NpcId = act.Scene.NpcId, Trust = 20 });
         database.TraitScores.AddRange(TraitIds.Select(id => new TraitScore { SessionId = session.Id, TraitId = id }));
         database.CareerAffinities.AddRange(AffinityIds.Select(id => new CareerAffinity { SessionId = session.Id, AffinityId = id }));
-        database.GameEvents.Add(CreateEvent(session.Id, 1, "SessionStarted", new { mode = "Mock" }));
+        database.GameEvents.Add(CreateEvent(session.Id, 1, "SessionStarted", new { mode = "Mock", failureScenario }));
         await database.SaveChangesAsync();
 
         return new SessionStartResponse(session.Id, 1, act.TimeLabel,
@@ -61,12 +65,15 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         if (request.NpcId != act.Scene.NpcId) throw new GameRuleException("INVALID_NPC", "현재 장면의 NPC와 일치하지 않습니다.");
         if (string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 300) throw new GameRuleException("INVALID_TEXT", "대화는 1자 이상 300자 이하로 입력해 주세요.");
 
-        var response = new DialogueResponse(act.MockDialogue.Dialogue, act.MockDialogue.Emotion, act.MockDialogue.Feedback,
-            act.MockDialogue.AcceptedTags, act.MockDialogue.CareerFeedback, 0, true);
+        var generated = await dialogueGeneration.GenerateAsync(act, GetFailureScenario(session.Mode));
+        var dialogue = generated.Content;
+        var response = new DialogueResponse(dialogue.Dialogue, dialogue.Emotion, dialogue.Feedback,
+            dialogue.AcceptedTags, dialogue.CareerFeedback, 0, true, generated.ResponseSource,
+            generated.FallbackUsed, generated.AttemptCount);
         var npc = await database.NpcStates.SingleAsync(state => state.SessionId == sessionId && state.NpcId == act.Scene.NpcId);
         npc.Trust = Math.Clamp(npc.Trust + 2, 0, 100);
-        npc.ConversationSummary = act.MockDialogue.Summary;
-        foreach (var tag in act.MockDialogue.AcceptedTags.Where(TraitIds.Contains))
+        npc.ConversationSummary = dialogue.Summary;
+        foreach (var tag in dialogue.AcceptedTags.Where(TraitIds.Contains))
         {
             var trait = await database.TraitScores.SingleAsync(score => score.SessionId == sessionId && score.TraitId == tag);
             trait.Score = Math.Clamp(trait.Score + 1, 0, 10);
@@ -113,7 +120,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         NextActivityResponse? nextActivity = null;
         if (act.FinaleRules is not null)
         {
-            ending = BuildFinalEnding(session, act, choice, request.TimedOut);
+            ending = await BuildFinalEndingAsync(session, act, choice, request.TimedOut);
             session.Status = "Completed";
             session.Phase = "Completed";
             session.EndingJson = JsonSerializer.Serialize(ending, JsonOptions);
@@ -234,6 +241,9 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         if (!Guid.TryParse(key, out _)) throw new GameRuleException("INVALID_IDEMPOTENCY_KEY", "idempotencyKey는 UUID 형식이어야 합니다.");
     }
 
+    private static string GetFailureScenario(string mode) =>
+        mode.StartsWith("Mock:", StringComparison.Ordinal) ? mode[5..] : "none";
+
     private static void ApplyStateChanges(GameSession session, IReadOnlyDictionary<string, int> changes)
     {
         foreach (var (state, amount) in changes)
@@ -251,7 +261,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
 
     private static readonly IReadOnlyDictionary<string, int> EmptyChanges = new Dictionary<string, int>();
 
-    private static EndingResponse BuildFinalEnding(GameSession session, MockActContent act, ChoiceContent choice, bool timedOut)
+    private async Task<EndingResponse> BuildFinalEndingAsync(GameSession session, MockActContent act, ChoiceContent choice, bool timedOut)
     {
         var rules = act.FinaleRules ?? throw new InvalidOperationException("Finale rules were not found.");
         var intended = choice.FinalOutcome ?? throw new InvalidOperationException($"Final outcome was not found: {choice.ChoiceId}");
@@ -260,15 +270,53 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             .Count(value => value >= rules.PreparedStateThreshold);
         var requirementsMet = intended.Requirements.All(requirement => GetStateValue(state, requirement.Key) >= requirement.Value);
         var evacuation = choice.ChoiceId == act.TimeoutChoiceId;
-        var outcome = evacuation || requirementsMet && preparedCount >= rules.RequiredPreparedStates
+        var intendedSucceeded = evacuation || requirementsMet && preparedCount >= rules.RequiredPreparedStates;
+        var outcome = intendedSucceeded
             ? intended
             : state.Legitimacy >= rules.DamagedSurvivalLegitimacy ? rules.DamagedSurvival : rules.Destroyed;
+        var affinityScores = await database.CareerAffinities
+            .Where(affinity => affinity.SessionId == session.Id)
+            .ToArrayAsync();
+        var topAffinities = affinityScores
+            .OrderByDescending(affinity => affinity.Score)
+            .ThenByDescending(affinity => affinity.LastChangedAct)
+            .ThenBy(affinity => affinity.AffinityId)
+            .Take(2)
+            .ToArray();
+        var careerRules = rules.CareerRules;
+        var baseRank = careerRules.RankByTerritoryFate.TryGetValue(outcome.TerritoryFateId, out var mappedRank)
+            ? mappedRank
+            : throw new InvalidOperationException($"Career rank was not found for fate: {outcome.TerritoryFateId}");
+        var topScore = topAffinities.FirstOrDefault()?.Score ?? 0;
+        var careerRank = baseRank == "accomplished" && preparedCount >= careerRules.LegendaryPreparedStates
+            && topScore >= careerRules.LegendaryAffinityScore ? "legendary" : baseRank;
+        var endingTone = careerRules.ToneByCareerRank.TryGetValue(careerRank, out var mappedTone)
+            ? mappedTone
+            : throw new InvalidOperationException($"Ending tone was not found for rank: {careerRank}");
+        var careerAffinityId = intendedSucceeded && !string.IsNullOrWhiteSpace(intended.CareerAffinityId)
+            ? intended.CareerAffinityId
+            : topAffinities.FirstOrDefault()?.AffinityId;
+        if (careerAffinityId is null || !careerRules.Templates.TryGetValue(careerAffinityId, out var occupationTemplate))
+            throw new InvalidOperationException($"Career template was not found: {careerAffinityId}");
+        if (!occupationTemplate.Occupations.TryGetValue(careerRank, out var occupationName))
+            throw new InvalidOperationException($"Occupation template was not found: {careerAffinityId}/{careerRank}");
+        var affinityFacts = topAffinities.Select(affinity =>
+        {
+            var template = careerRules.Templates[affinity.AffinityId];
+            return new CareerAffinityResponse(affinity.AffinityId, affinity.Score, template.Evidence);
+        }).ToArray();
+        var careerEvidence = new[] { choice.ResultNarration }
+            .Concat(affinityFacts.Select(fact => fact.Evidence))
+            .Distinct()
+            .Take(3)
+            .ToArray();
         var timingRecord = timedOut
             ? "결정 시간이 끝나 주민 대피 명령이 자동으로 내려졌다."
             : choice.ResultNarration;
-        return new EndingResponse(outcome.OccupationName, outcome.Title, outcome.TerritoryOutcome,
+        return new EndingResponse(occupationName, outcome.Title, outcome.TerritoryOutcome,
             [timingRecord, $"최종 준비 상태: 군사 {state.Military}, 재정 {state.Treasury}, 정통성 {state.Legitimacy}, 봉인 {state.Ward}",
-                $"준비 기준을 충족한 핵심 상태는 {preparedCount}개였다."], outcome.Traits, outcome.ShareLine, outcome.TerritoryFateId);
+                $"준비 기준을 충족한 핵심 상태는 {preparedCount}개였다."], outcome.Traits, outcome.ShareLine,
+            outcome.TerritoryFateId, careerRank, endingTone, affinityFacts, careerEvidence);
     }
 
     private static int GetStateValue(GameStateResponse state, string id) => id switch

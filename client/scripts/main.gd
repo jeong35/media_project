@@ -64,6 +64,7 @@ const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 @onready var ending_screen: VBoxContainer = $Page/EndingScreen
 @onready var occupation: Label = $Page/EndingScreen/Occupation
 @onready var ending_title: Label = $Page/EndingScreen/EndingTitle
+@onready var career_summary: Label = $Page/EndingScreen/CareerSummary
 @onready var outcome: Label = $Page/EndingScreen/Outcome
 @onready var records: Label = $Page/EndingScreen/Records
 @onready var share_line: Label = $Page/EndingScreen/ShareLine
@@ -90,6 +91,7 @@ var smoke_runs := 0
 var final_time_limit := 0.0
 var timeout_choice_id := ""
 var saved_session_id := ""
+var mock_failure_scenario := "none"
 
 
 func _ready() -> void:
@@ -118,7 +120,14 @@ func _ready() -> void:
 	smoke_save_choice_test = "--smoke-save-choice" in arguments
 	smoke_save_test = "--smoke-save" in arguments or smoke_save_dialogue_test or smoke_save_choice_test
 	smoke_resume_test = "--smoke-resume" in arguments
-	smoke_test = "--smoke-test" in arguments or smoke_timeout_test or smoke_save_test or smoke_resume_test
+	if "--smoke-dialogue-transient" in arguments:
+		mock_failure_scenario = "transient_once"
+	elif "--smoke-dialogue-invalid" in arguments:
+		mock_failure_scenario = "invalid_payload"
+	elif "--smoke-dialogue-timeout" in arguments:
+		mock_failure_scenario = "timeout"
+	smoke_test = "--smoke-test" in arguments or smoke_timeout_test or smoke_save_test or smoke_resume_test \
+		or mock_failure_scenario != "none"
 	_load_saved_session_reference()
 	if smoke_resume_test:
 		_continue_game()
@@ -151,7 +160,10 @@ func _start_new_game() -> void:
 	connection_status.text = "새 세션을 만드는 중…"
 	new_game_button.disabled = true
 	continue_button.disabled = true
-	_request_json("start", HTTPClient.METHOD_POST, "/api/v1/sessions", {"mode": "mock"})
+	_request_json("start", HTTPClient.METHOD_POST, "/api/v1/sessions", {
+		"mode": "mock",
+		"failureScenario": mock_failure_scenario
+	})
 
 
 func _continue_game() -> void:
@@ -327,7 +339,8 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 
 func _show_dialogue(payload: Dictionary) -> void:
 	npc_dialogue.text = payload.get("dialogue", "")
-	feedback.text = "%s\n%s" % [payload.get("feedback", ""), payload.get("careerFeedback", "")]
+	var fallback_note := "\n대화 생성에 실패해 준비된 대사를 사용했습니다." if payload.get("fallbackUsed", false) else ""
+	feedback.text = "%s\n%s%s" % [payload.get("feedback", ""), payload.get("careerFeedback", ""), fallback_note]
 	player_input.hide()
 	send_button.hide()
 	_fetch_choices()
@@ -496,6 +509,10 @@ func _show_ending(payload: Dictionary) -> void:
 	var ending_records: Array = ending.get("records", [])
 	occupation.text = ending.get("occupationName", "")
 	ending_title.text = ending.get("title", "")
+	career_summary.text = "직업 위상 %s · 엔딩 톤 %s" % [
+		_translate_career_rank(str(ending.get("careerRank", "survivor"))),
+		_translate_ending_tone(str(ending.get("endingTone", "orthodox")))
+	]
 	outcome.text = "%s\n%s" % [ending.get("territoryOutcome", ""), payload.get("feedback", "")]
 	records.text = "결정적 기록\n• " + "\n• ".join(ending_records)
 	share_line.text = ending.get("shareLine", "")
@@ -515,6 +532,24 @@ func _show_ending(payload: Dictionary) -> void:
 		else:
 			print("MOCK_SLICE_RESTART_OK: %s" % JSON.stringify(payload))
 			get_tree().quit()
+
+
+func _translate_career_rank(rank_id: String) -> String:
+	return {
+		"fallen": "몰락",
+		"survivor": "생존",
+		"accomplished": "성취",
+		"legendary": "전설"
+	}.get(rank_id, rank_id)
+
+
+func _translate_ending_tone(tone_id: String) -> String:
+	return {
+		"orthodox": "정통",
+		"prestige": "명예",
+		"unexpected": "의외",
+		"b_grade": "B급"
+	}.get(tone_id, tone_id)
 
 
 func _show_error(message: String) -> void:

@@ -24,9 +24,15 @@ public sealed record FarmingContent(string Title, string Instructions, int Obsta
 public sealed record FarmingOutcomeContent(string Feedback, IReadOnlyDictionary<string, int> Changes, IReadOnlyDictionary<string, int> AffinityChanges);
 public sealed record EndingContent(string OccupationName, string Title, string TerritoryOutcome, IReadOnlyList<string> Records, IReadOnlyList<string> Traits, string ShareLine);
 public sealed record FinaleRulesContent(int PreparedStateThreshold, int RequiredPreparedStates, int DamagedSurvivalLegitimacy,
-    FinalOutcomeContent DamagedSurvival, FinalOutcomeContent Destroyed);
+    FinalOutcomeContent DamagedSurvival, FinalOutcomeContent Destroyed, CareerRulesContent CareerRules);
 public sealed record FinalOutcomeContent(IReadOnlyDictionary<string, int> Requirements, string TerritoryFateId,
-    string OccupationName, string Title, string TerritoryOutcome, IReadOnlyList<string> Traits, string ShareLine);
+    string OccupationName, string Title, string TerritoryOutcome, IReadOnlyList<string> Traits, string ShareLine,
+    string? CareerAffinityId = null);
+public sealed record CareerRulesContent(int LegendaryPreparedStates, int LegendaryAffinityScore,
+    IReadOnlyDictionary<string, string> RankByTerritoryFate, IReadOnlyDictionary<string, string> ToneByCareerRank,
+    IReadOnlyDictionary<string, CareerTemplateContent> Templates);
+public sealed record CareerTemplateContent(string DisplayName, string Evidence,
+    IReadOnlyDictionary<string, string> Occupations);
 
 public static class MockContentLoader
 {

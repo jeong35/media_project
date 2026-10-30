@@ -141,6 +141,27 @@ GET  /api/v1/sessions/{id}
 | 영지 멸망 | destroyed | destroyed | PASS |
 | 시간 초과 선택 검증 | INVALID_TIMEOUT_CHOICE | INVALID_TIMEOUT_CHOICE | PASS |
 | 중복 요청 방지 | 상태 1회 적용 | 상태 1회 적용 | PASS |
+| 기존 엔딩 복구 호환 | survivor / orthodox 기본값 | survivor / orthodox 기본값 | PASS |
+| 일시 오류 재시도 | 2회째 정상 응답 | 2회째 정상 응답 | PASS |
+| 잘못된 대화 JSON | 고정 대사 폴백 후 진행 | 고정 대사 폴백 후 진행 | PASS |
+| 대화 생성 타임아웃 | 고정 대사 폴백 후 진행 | 고정 대사 폴백 후 진행 | PASS |
+
+### 6.5 직업 적성 기반 엔딩
+
+2026-10-30에 누적 직업 적성과 최종 업적을 직업 엔딩에 연결했다. 서버가 영지 운명과 별도로 `careerRank`, `endingTone`, 상위 적성 2개와 근거를 확정하며, 외부 AI 없이 JSON의 고정 직업 템플릿을 사용한다. 성공한 최종 행동은 직업군의 핵심 근거로 우선하고, 실패 결말은 누적 1순위 적성을 반영한다.
+
+| 경로 | 운명 / 위상 / 직업 | 결과 |
+| --- | --- | --- |
+| 기사단 방어 성공 | self_saved / accomplished / 균열 수비대장 | PASS |
+| 봉인식 성공 | self_saved / accomplished / 북부 봉화술사 | PASS |
+| 외부 지원 성공 | external_aid / accomplished / 북부 연합 조정관 | PASS |
+| 피해 생존 | damaged_survival / survivor / 피난민의 길잡이 | PASS |
+| 시간 초과 대피 | people_evacuated / survivor / 피난민의 길잡이 | PASS |
+| 영지 멸망 | destroyed / fallen / 유랑 봉화 연구자 | PASS |
+
+### 6.6 대화 생성 실패 복구
+
+대화 생성 경계를 별도 서비스로 분리했다. 일시 오류는 같은 요청 안에서 1회 재시도하고, 잘못된 JSON이나 타임아웃이 두 번 발생하면 Act별 고정 대사로 전환한다. 세 경우 모두 Godot에서 선택, 엔딩과 재시작까지 완주했다. 이 구조는 이후 Mock Provider를 OpenAI Provider로 교체해도 게임 규칙과 진행 흐름을 유지하기 위한 것이다.
 
 ## 7. 문제와 해결
 
@@ -163,7 +184,7 @@ GET  /api/v1/sessions/{id}
 
 ## 8. 결과와 의미
 
-이 작업으로 Godot UI, ASP.NET Core API, JSON 콘텐츠, SQLite 저장과 서버 규칙이 네 Act, 농사, 제한시간 최종 선택과 직업 엔딩까지 연결되는 것을 확인했다. 실제 AI와 그래픽이 없어도 한 판을 처음부터 끝까지 완주하고 다시 시작할 수 있다.
+이 작업으로 Godot UI, ASP.NET Core API, JSON 콘텐츠, SQLite 저장과 서버 규칙이 네 Act, 농사, 제한시간 최종 선택과 적성 기반 직업 엔딩까지 연결되는 것을 확인했다. 실제 AI와 그래픽이 없어도 한 판을 처음부터 끝까지 완주하고 다시 시작할 수 있다.
 
 포트폴리오 관점에서 다음 역량을 증명하는 작업이다.
 
@@ -179,9 +200,9 @@ GET  /api/v1/sessions/{id}
 
 현재 고정 콘텐츠 기반 Mock 게임은 Act 1부터 최종 엔딩까지 완주된다. 다음 단계에서는 AI를 연결하기 전에 아래 안정성 범위를 보강한다.
 
-1. 직업 적성 기반 직업 위상 판정 세분화
-2. 실제 AI 연결 전 Mock 실패·재시도 동선 보강
-3. 농사 도중 상태와 Act 4 남은 시간의 세부 복구 정책 확정
+1. 농사 도중 상태와 Act 4 남은 시간의 세부 복구 정책 확정
+2. 전설 위상과 의외·B급 톤을 해금할 추가 업적 설계
+3. Mock과 같은 계약을 사용하는 OpenAI Provider 경계 설계
 
 전체 Mock 게임이 안정적으로 완주된 뒤에만 OpenAI API Provider와 생성형 후일담을 추가한다.
 
@@ -206,6 +227,9 @@ Godot 실행:
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-timeout
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-save
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-resume
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-dialogue-transient
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-dialogue-invalid
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path client -- --smoke-dialogue-timeout
 ```
 
 영지 운명 규칙 테스트:

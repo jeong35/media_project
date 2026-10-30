@@ -195,6 +195,8 @@ def parse_markdown(markdown: str, styles: dict[str, ParagraphStyle]) -> list:
         index += 1
 
     flush_paragraph()
+    while story and isinstance(story[-1], Spacer):
+        story.pop()
     return story
 
 

@@ -33,7 +33,8 @@
         "title": "무너지지 않은 성벽의 선봉",
         "territoryOutcome": "스스로 균열의 파편을 막아 살아남은 영지",
         "traits": ["용기", "지도력", "실행력"],
-        "shareLine": "그는 예언된 멸망 앞에서 물러서지 않고 영지의 방패가 되었다."
+        "shareLine": "그는 예언된 멸망 앞에서 물러서지 않고 영지의 방패가 되었다.",
+        "careerAffinityId": "martial"
       }
     },
     {
@@ -51,7 +52,8 @@
         "title": "세 봉화의 불을 다시 이은 자",
         "territoryOutcome": "봉인식을 완성해 스스로 균열을 닫은 영지",
         "traits": ["통찰", "마법", "집중력"],
-        "shareLine": "그는 꺼져 가던 세 빛을 이어 멸망의 하늘을 봉합했다."
+        "shareLine": "그는 꺼져 가던 세 빛을 이어 멸망의 하늘을 봉합했다.",
+        "careerAffinityId": "arcane"
       }
     },
     {
@@ -69,7 +71,8 @@
         "title": "고립된 영지에 길을 연 협상가",
         "territoryOutcome": "외부 지원군과 함께 균열의 충격을 견딘 영지",
         "traits": ["외교", "신뢰", "협상력"],
-        "shareLine": "그는 혼자 버티는 대신 신뢰로 북부 전체를 움직였다."
+        "shareLine": "그는 혼자 버티는 대신 신뢰로 북부 전체를 움직였다.",
+        "careerAffinityId": "diplomacy"
       }
     },
     {
@@ -87,7 +90,8 @@
         "title": "영지보다 사람을 먼저 살린 영주",
         "territoryOutcome": "땅은 잃었지만 주민 대부분이 살아남은 영지",
         "traits": ["다정함", "결단력", "책임감"],
-        "shareLine": "그는 성을 버렸지만 영지의 진짜 이름인 사람들을 지켜 냈다."
+        "shareLine": "그는 성을 버렸지만 영지의 진짜 이름인 사람들을 지켜 냈다.",
+        "careerAffinityId": "leadership"
       }
     }
   ],
@@ -114,6 +118,86 @@
       "territoryOutcome": "준비가 힘을 발휘하지 못해 균열에 무너진 영지",
       "traits": ["회한", "기록", "생존"],
       "shareLine": "그의 선택은 영지를 구하지 못했지만 다음 멸망을 막을 기록으로 남았다."
+    },
+    "careerRules": {
+      "legendaryPreparedStates": 3,
+      "legendaryAffinityScore": 30,
+      "rankByTerritoryFate": {
+        "self_saved": "accomplished",
+        "external_aid": "accomplished",
+        "damaged_survival": "survivor",
+        "people_evacuated": "survivor",
+        "absorbed": "survivor",
+        "destroyed": "fallen"
+      },
+      "toneByCareerRank": {
+        "fallen": "orthodox",
+        "survivor": "orthodox",
+        "accomplished": "orthodox",
+        "legendary": "prestige"
+      },
+      "templates": {
+        "martial": {
+          "displayName": "군사",
+          "evidence": "기사단 훈련과 직접 방어로 전투 지휘력을 증명했다.",
+          "occupations": {
+            "fallen": "몰락 기사",
+            "survivor": "북부 생존 기사",
+            "accomplished": "균열 수비대장",
+            "legendary": "구국의 기사단장"
+          }
+        },
+        "arcane": {
+          "displayName": "마법",
+          "evidence": "봉화와 균열 연구를 통해 마법 문제 해결력을 쌓았다.",
+          "occupations": {
+            "fallen": "유랑 봉화 연구자",
+            "survivor": "균열 감시 마법사",
+            "accomplished": "북부 봉화술사",
+            "legendary": "세 봉화의 마탑주"
+          }
+        },
+        "diplomacy": {
+          "displayName": "외교",
+          "evidence": "주민과 외부 세력의 협력을 이끌어 협상력을 입증했다.",
+          "occupations": {
+            "fallen": "잊힌 사절",
+            "survivor": "피난민 교섭관",
+            "accomplished": "북부 연합 조정관",
+            "legendary": "왕국 재상"
+          }
+        },
+        "commerce": {
+          "displayName": "상업",
+          "evidence": "한정된 자금과 생산물을 배분해 영지의 자원을 운용했다.",
+          "occupations": {
+            "fallen": "떠돌이 보급상",
+            "survivor": "변경 보급관",
+            "accomplished": "북부 수석 재무관",
+            "legendary": "왕실 재무관"
+          }
+        },
+        "leadership": {
+          "displayName": "지도력",
+          "evidence": "주민의 신뢰를 모으고 위기 속 공동 행동을 지휘했다.",
+          "occupations": {
+            "fallen": "몰락 영지의 기록자",
+            "survivor": "피난민의 길잡이",
+            "accomplished": "북부 재건 영주",
+            "legendary": "구국의 대공"
+          }
+        },
+        "craft": {
+          "displayName": "제작",
+          "evidence": "농사와 봉인 준비에 실용적인 도구와 기술을 적용했다.",
+          "occupations": {
+            "fallen": "유랑 수리공",
+            "survivor": "생존 장인",
+            "accomplished": "마력보리 도구장",
+            "legendary": "왕실 연금장인"
+          }
+        }
+      }
     }
   }
 }

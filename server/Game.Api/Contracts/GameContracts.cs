@@ -1,17 +1,22 @@
 namespace Game.Api.Contracts;
 
 public sealed record HealthResponse(string Status, string Service, string Version, bool DatabaseReady);
-public sealed record SessionStartRequest(string Mode = "mock");
+public sealed record SessionStartRequest(string Mode = "mock", string FailureScenario = "none");
 public sealed record SceneResponse(string BackgroundId, string NpcId, string NpcName, string NpcEmotion, string Narration);
 public sealed record SessionStartResponse(Guid SessionId, int Act, string TimeLabel, SceneResponse Scene, string OpeningDialogue, int DialogueRemaining);
 public sealed record DialogueRequest(string NpcId, string Text, string IdempotencyKey);
-public sealed record DialogueResponse(string Dialogue, string Emotion, string Feedback, IReadOnlyList<string> AcceptedTags, string CareerFeedback, int DialogueRemaining, bool ChoicesAvailable);
+public sealed record DialogueResponse(string Dialogue, string Emotion, string Feedback, IReadOnlyList<string> AcceptedTags,
+    string CareerFeedback, int DialogueRemaining, bool ChoicesAvailable, string ResponseSource = "mock",
+    bool FallbackUsed = false, int AttemptCount = 1);
 public sealed record ChoiceOptionResponse(string ChoiceId, string Label);
 public sealed record ChoicesResponse(IReadOnlyList<ChoiceOptionResponse> Choices, int? TimeLimitSeconds = null, string? TimeoutChoiceId = null);
 public sealed record ChoiceRequest(string ChoiceId, string IdempotencyKey, bool TimedOut = false);
 public sealed record GameStateResponse(int Military, int Treasury, int Legitimacy, int Ward);
+public sealed record CareerAffinityResponse(string AffinityId, int Score, string Evidence);
 public sealed record EndingResponse(string OccupationName, string Title, string TerritoryOutcome, IReadOnlyList<string> Records,
-    IReadOnlyList<string> Traits, string ShareLine, string TerritoryFateId = "pending");
+    IReadOnlyList<string> Traits, string ShareLine, string TerritoryFateId = "pending", string CareerRank = "survivor",
+    string EndingTone = "orthodox", IReadOnlyList<CareerAffinityResponse>? TopCareerAffinities = null,
+    IReadOnlyList<string>? CareerEvidence = null);
 public sealed record NextActResponse(int Act, string TimeLabel, SceneResponse Scene, string OpeningDialogue, int DialogueRemaining);
 public sealed record NextActivityResponse(string ActivityId, string Title, string Instructions);
 public sealed record ChoiceResultResponse(string ResultNarration, string Feedback, IReadOnlyDictionary<string, int> AppliedChanges,
