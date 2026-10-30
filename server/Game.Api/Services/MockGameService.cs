@@ -6,7 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Game.Api.Services;
 
-public sealed class MockGameService(GameDbContext database, MockGameContent content, DialogueGenerationService dialogueGeneration)
+public sealed class MockGameService(GameDbContext database, MockGameContent content, DialogueGenerationService dialogueGeneration,
+    CareerEndingGenerationService careerEndingGeneration)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] TraitIds = ["kind", "ruthless", "persuasive", "observant", "pragmatic", "reckless", "eccentric", "threatening"];
@@ -37,7 +38,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         database.NpcStates.Add(new NpcState { SessionId = session.Id, NpcId = act.Scene.NpcId, Trust = 20 });
         database.TraitScores.AddRange(TraitIds.Select(id => new TraitScore { SessionId = session.Id, TraitId = id }));
         database.CareerAffinities.AddRange(AffinityIds.Select(id => new CareerAffinity { SessionId = session.Id, AffinityId = id }));
-        database.GameEvents.Add(CreateEvent(session.Id, 1, "SessionStarted", new { mode = "Mock", failureScenario }));
+        database.GameEvents.Add(CreateEvent(session.Id, 1, "SessionStarted", new { mode = session.Mode, failureScenario }));
         await database.SaveChangesAsync();
 
         return new SessionStartResponse(session.Id, 1, act.TimeLabel,
@@ -412,9 +413,13 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             $"준비 기준을 충족한 핵심 상태는 {preparedCount}개였다."
         };
         if (toneAchievement is not null) endingRecords.Add($"해금 업적: {toneAchievement.DisplayName}");
-        return new EndingResponse(occupationName, outcome.Title, outcome.TerritoryOutcome,
+        var facts = new CareerEndingFacts(occupationName, outcome.Title, outcome.TerritoryOutcome,
+            outcome.TerritoryFateId, careerRank, endingTone, affinityFacts, careerEvidence, outcome.Traits);
+        var generated = await careerEndingGeneration.GenerateAsync(GetProviderId(session.Mode), facts);
+        return new EndingResponse(generated.Content.OccupationName, outcome.Title, outcome.TerritoryOutcome,
             endingRecords, outcome.Traits, outcome.ShareLine,
-            outcome.TerritoryFateId, careerRank, endingTone, affinityFacts, careerEvidence);
+            outcome.TerritoryFateId, careerRank, endingTone, affinityFacts, careerEvidence,
+            generated.Content.Epilogue, generated.ResponseSource, generated.FallbackUsed, generated.AttemptCount);
     }
 
     private static int GetStateValue(GameStateResponse state, string id) => id switch

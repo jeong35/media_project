@@ -47,6 +47,11 @@ results.Add(await RunLiveProviderScenarioAsync(content, new StubDialogueProvider
     "fixed_fallback", true, 1));
 results.Add(await RunOpenAiHttpContractAsync(content));
 results.Add(await RunOpenAiQuotaFallbackAsync(content));
+results.Add(await RunLiveCareerEndingScenarioAsync(content, CareerStubBehavior.Success,
+    "openai", false, "북부의 구국의 기사단장"));
+results.Add(await RunLiveCareerEndingScenarioAsync(content, CareerStubBehavior.InvalidOccupation,
+    "fixed_fallback", true, "구국의 기사단장"));
+results.Add(await RunOpenAiCareerEndingHttpContractAsync(content));
 results.Add(await RunFarmingProgressRecoveryAsync(content));
 results.Add(await RunFinalTimerRecoveryAsync(content));
 
@@ -83,7 +88,9 @@ static async Task<TestResult> RunFateScenarioAsync(MockGameContent content, Fate
         var dominantAffinity = ending.TopCareerAffinities?.FirstOrDefault()?.AffinityId ?? "missing_affinity";
         var passed = actual == scenario.ExpectedFate && ending.CareerRank == scenario.ExpectedRank
             && dominantAffinity == scenario.ExpectedDominantAffinity && ending.OccupationName == scenario.ExpectedOccupation
-            && ending.EndingTone == scenario.ExpectedTone && ending.CareerEvidence?.Count >= 2;
+            && ending.EndingTone == scenario.ExpectedTone && ending.CareerEvidence?.Count >= 2
+            && !string.IsNullOrWhiteSpace(ending.Epilogue) && ending.GenerationSource == "mock"
+            && !ending.GenerationFallbackUsed;
         var expected = $"{scenario.ExpectedFate}/{scenario.ExpectedRank}/{scenario.ExpectedTone}/{scenario.ExpectedOccupation}";
         var actualSummary = $"{actual}/{ending.CareerRank}/{ending.EndingTone}/{ending.OccupationName}";
         return new TestResult(scenario.Name, expected, actualSummary, $"{FormatState(result.State)}, 1순위 {dominantAffinity}",
@@ -162,7 +169,8 @@ static TestResult RunLegacyEndingCompatibility()
         var ending = JsonSerializer.Deserialize<EndingResponse>(oldEndingJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var actual = $"{ending?.CareerRank}/{ending?.EndingTone}";
         var passed = actual == expected && ending is not null
-            && ending.TopCareerAffinities is null && ending.CareerEvidence is null;
+            && ending.TopCareerAffinities is null && ending.CareerEvidence is null
+            && ending.Epilogue == string.Empty && ending.GenerationSource == "fixed_template";
         return new TestResult("기존 엔딩 복구 호환", expected, actual, "신규 필드가 없는 저장 JSON", passed,
             passed ? null : "이전 버전의 완료 세션을 새 엔딩 계약으로 읽지 못했습니다.");
     }
@@ -281,6 +289,83 @@ static async Task<TestResult> RunOpenAiQuotaFallbackAsync(MockGameContent conten
     }
 }
 
+static async Task<TestResult> RunLiveCareerEndingScenarioAsync(MockGameContent content,
+    CareerStubBehavior behavior, string expectedSource, bool expectedFallback, string expectedOccupation)
+{
+    try
+    {
+        var dialogueProvider = new StubDialogueProvider("openai", StubProviderBehavior.Success);
+        var endingProvider = new StubCareerEndingProvider("openai", behavior);
+        await using var fixture = await GameFixture.CreateAsync(content, dialogueProvider, endingProvider);
+        var scenario = new FateScenario("Live 직업 후일담", "rebuild_knights", "train_defenders",
+            "farm_with_residents", "community", "manual", "final_defense", false,
+            "self_saved", "legendary", "prestige", "martial", "구국의 기사단장");
+        var progress = await AdvanceToFinalChoiceAsync(fixture.Service, scenario, "live");
+        var result = await fixture.Service.SubmitChoiceAsync(progress.SessionId,
+            new ChoiceRequest(scenario.FinalChoice, NewKey(), false));
+        var ending = result.Ending ?? throw new InvalidOperationException("엔딩 응답이 없습니다.");
+        var passed = ending.TerritoryFateId == "self_saved" && ending.CareerRank == "legendary"
+            && ending.EndingTone == "prestige" && ending.OccupationName == expectedOccupation
+            && ending.GenerationSource == expectedSource && ending.GenerationFallbackUsed == expectedFallback
+            && ending.GenerationAttemptCount == 1 && !string.IsNullOrWhiteSpace(ending.Epilogue);
+        var expected = $"self_saved/legendary/prestige/{expectedOccupation}/{expectedSource}";
+        var actual = $"{ending.TerritoryFateId}/{ending.CareerRank}/{ending.EndingTone}/{ending.OccupationName}/{ending.GenerationSource}";
+        return new TestResult($"Live 직업 후일담-{behavior}", expected, actual,
+            $"fallback={ending.GenerationFallbackUsed.ToString().ToLowerInvariant()}", passed,
+            passed ? null : "생성 표현이 서버 판정값을 보존하지 못했거나 폴백 경계가 다릅니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult($"Live 직업 후일담-{behavior}", expectedSource, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunOpenAiCareerEndingHttpContractAsync(MockGameContent content)
+{
+    const string expected = "Responses API/ending_json_schema/output_text";
+    try
+    {
+        var facts = new CareerEndingFacts("구국의 기사단장", "칭호", "스스로 살아남은 영지", "self_saved",
+            "legendary", "prestige", [new CareerAffinityResponse("martial", 30, "전투 지휘")],
+            ["기사단을 이끌어 균열을 막았다."], ["용기", "지도력"]);
+        var generated = new GeneratedCareerEnding("북부의 구국의 기사단장",
+            "영지는 살아남았다. 그는 기사단을 이끌었다. 사람들은 그를 오래 기억했다.");
+        var handler = new CapturingHttpHandler((_, _) => JsonResponse(HttpStatusCode.OK, new
+        {
+            status = "completed",
+            output = new[] { new { type = "message", content = new[]
+                { new { type = "output_text", text = JsonSerializer.Serialize(generated, new JsonSerializerOptions(JsonSerializerDefaults.Web)) } } } }
+        }));
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.openai.com/v1/") };
+        var provider = new OpenAiCareerEndingProvider(client, Options.Create(new OpenAiOptions
+        {
+            ApiKey = "test-placeholder", Model = "test-model", TimeoutSeconds = 2, MaxOutputTokens = 300
+        }));
+        var raw = await provider.GenerateAsync(new CareerEndingProviderRequest(facts, 1));
+        var parsed = JsonSerializer.Deserialize<GeneratedCareerEnding>(raw,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var requestDocument = JsonDocument.Parse(handler.RequestBody!);
+        var factsJson = requestDocument.RootElement.GetProperty("input")[1].GetProperty("content").GetString()!;
+        using var factsDocument = JsonDocument.Parse(factsJson);
+        var factsOk = factsDocument.RootElement.GetProperty("careerRank").GetString() == "legendary"
+            && factsDocument.RootElement.GetProperty("endingTone").GetString() == "prestige"
+            && factsDocument.RootElement.GetProperty("templateOccupationName").GetString() == "구국의 기사단장";
+        var requestOk = handler.RequestBody?.Contains("\"career_ending_expression\"") == true
+            && handler.RequestBody.Contains("\"additionalProperties\":false")
+            && factsOk
+            && !handler.RequestBody.Contains("maxLength")
+            && handler.AuthorizationScheme == "Bearer" && handler.RequestUri?.AbsolutePath == "/v1/responses";
+        var passed = handler.CallCount == 1 && requestOk && parsed?.OccupationName == generated.OccupationName;
+        return new TestResult("OpenAI 직업 후일담 HTTP 계약", expected,
+            passed ? expected : "request-or-response-mismatch", $"HTTP 호출 {handler.CallCount}회", passed,
+            passed ? null : "후일담 Responses API 요청 스키마 또는 output_text 추출이 계약과 다릅니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("OpenAI 직업 후일담 HTTP 계약", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
 static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, object payload) => new(statusCode)
 {
     Content = new StringContent(JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
@@ -366,9 +451,10 @@ static async Task<Guid> AdvanceToFarmingAsync(MockGameService game)
     return start.SessionId;
 }
 
-static async Task<FinalChoiceProgress> AdvanceToFinalChoiceAsync(MockGameService game, FateScenario scenario)
+static async Task<FinalChoiceProgress> AdvanceToFinalChoiceAsync(MockGameService game, FateScenario scenario,
+    string mode = "mock")
 {
-    var start = await game.StartSessionAsync("mock");
+    var start = await game.StartSessionAsync(mode);
     await game.SubmitDialogueAsync(start.SessionId, new DialogueRequest(start.Scene.NpcId, "첫 결정을 내린다.", NewKey()));
     var act1 = await game.SubmitChoiceAsync(start.SessionId, new ChoiceRequest(scenario.Act1Choice, NewKey()));
     Assert(act1.NextAct?.Act == 2, "Act 2로 전환되지 않았습니다.");
@@ -425,7 +511,8 @@ sealed class GameFixture : IAsyncDisposable
         Service = service;
     }
 
-    public static async Task<GameFixture> CreateAsync(MockGameContent content, IDialogueProvider? liveProvider = null)
+    public static async Task<GameFixture> CreateAsync(MockGameContent content, IDialogueProvider? liveProvider = null,
+        ICareerEndingProvider? liveEndingProvider = null)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -435,7 +522,11 @@ sealed class GameFixture : IAsyncDisposable
         var providers = new List<IDialogueProvider> { new MockDialogueProvider() };
         if (liveProvider is not null) providers.Add(liveProvider);
         var dialogueGeneration = new DialogueGenerationService(providers);
-        return new GameFixture(connection, database, new MockGameService(database, content, dialogueGeneration));
+        var endingProviders = new List<ICareerEndingProvider> { new MockCareerEndingProvider() };
+        if (liveEndingProvider is not null) endingProviders.Add(liveEndingProvider);
+        var careerEndingGeneration = new CareerEndingGenerationService(endingProviders);
+        return new GameFixture(connection, database,
+            new MockGameService(database, content, dialogueGeneration, careerEndingGeneration));
     }
 
     public async ValueTask DisposeAsync()
@@ -462,6 +553,25 @@ sealed class StubDialogueProvider(string providerId, StubProviderBehavior behavi
             throw new DialogueProviderException("configuration", false);
         var generated = new GeneratedDialogue("고정 계약을 지킨 Live 대사입니다.", "determined",
             "Live Provider 응답을 검증했다.", ["kind"], "대화 성향 근거를 남겼다.", "Live 응답 요약");
+        return Task.FromResult(JsonSerializer.Serialize(generated, JsonOptions));
+    }
+}
+
+enum CareerStubBehavior { Success, InvalidOccupation }
+
+sealed class StubCareerEndingProvider(string providerId, CareerStubBehavior behavior) : ICareerEndingProvider
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    public string ProviderId { get; } = providerId;
+    public int MaximumAttempts => 1;
+
+    public Task<string> GenerateAsync(CareerEndingProviderRequest request, CancellationToken cancellationToken = default)
+    {
+        var occupation = behavior == CareerStubBehavior.InvalidOccupation
+            ? "서버 판정을 무시한 떠돌이"
+            : $"북부의 {request.Facts.TemplateOccupationName}";
+        var generated = new GeneratedCareerEnding(occupation,
+            "영지는 위기를 넘겼다. 그는 자신의 선택을 직업으로 이어 갔다. 사람들은 그 기록을 오래 기억했다.");
         return Task.FromResult(JsonSerializer.Serialize(generated, JsonOptions));
     }
 }

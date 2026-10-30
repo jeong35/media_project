@@ -50,7 +50,7 @@ Act 4 · 균열 발생
 | 서버 | C#, ASP.NET Core Web API, .NET 10 | 세션, 진행 검증, 상태 계산, 엔딩 판정 |
 | 데이터 | SQLite, Entity Framework Core | 세션 상태, 이벤트 로그, 관계와 적성 저장 |
 | 콘텐츠 | JSON | NPC, 장면, 선택지, 상태 변화 규칙 |
-| AI | OpenAI Responses API, Structured Outputs | 서버 측 NPC 대사·태그·요약 생성, 오류 시 고정 콘텐츠 폴백 |
+| AI | OpenAI Responses API, Structured Outputs | 서버 측 NPC 대사와 직업 후일담 표현 생성, 오류 시 고정 콘텐츠 폴백 |
 | 버전 관리 | Git, GitHub | 기능 단위 변경 이력과 문서 관리 |
 
 ## 프로젝트 구조

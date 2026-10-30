@@ -61,14 +61,15 @@ const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 	$Page/FinalChoiceScreen/Choices/Choice3
 ]
 @onready var final_feedback: Label = $Page/FinalChoiceScreen/Feedback
-@onready var ending_screen: VBoxContainer = $Page/EndingScreen
-@onready var occupation: Label = $Page/EndingScreen/Occupation
-@onready var ending_title: Label = $Page/EndingScreen/EndingTitle
-@onready var career_summary: Label = $Page/EndingScreen/CareerSummary
-@onready var outcome: Label = $Page/EndingScreen/Outcome
-@onready var records: Label = $Page/EndingScreen/Records
-@onready var share_line: Label = $Page/EndingScreen/ShareLine
-@onready var restart_button: Button = $Page/EndingScreen/RestartButton
+@onready var ending_screen: ScrollContainer = $Page/EndingScreen
+@onready var occupation: Label = $Page/EndingScreen/Content/Occupation
+@onready var ending_title: Label = $Page/EndingScreen/Content/EndingTitle
+@onready var career_summary: Label = $Page/EndingScreen/Content/CareerSummary
+@onready var outcome: Label = $Page/EndingScreen/Content/Outcome
+@onready var epilogue: Label = $Page/EndingScreen/Content/Epilogue
+@onready var records: Label = $Page/EndingScreen/Content/Records
+@onready var share_line: Label = $Page/EndingScreen/Content/ShareLine
+@onready var restart_button: Button = $Page/EndingScreen/Content/RestartButton
 @onready var http_request: HTTPRequest = $HealthRequest
 @onready var checkpoint_request: HTTPRequest = $CheckpointRequest
 @onready var final_choice_timer: Timer = $FinalChoiceTimer
@@ -622,6 +623,7 @@ func _show_ending(payload: Dictionary) -> void:
 		_translate_ending_tone(str(ending.get("endingTone", "orthodox")))
 	]
 	outcome.text = "%s\n%s" % [ending.get("territoryOutcome", ""), payload.get("feedback", "")]
+	epilogue.text = ending.get("epilogue", "")
 	records.text = "결정적 기록\n• " + "\n• ".join(ending_records)
 	share_line.text = ending.get("shareLine", "")
 	game_screen.hide()
@@ -629,6 +631,7 @@ func _show_ending(payload: Dictionary) -> void:
 	final_choice_screen.hide()
 	final_choice_timer.stop()
 	ending_screen.show()
+	ending_screen.scroll_vertical = 0
 	if smoke_test:
 		if smoke_resume_test:
 			print("MOCK_SESSION_RESUME_OK: %s" % JSON.stringify(payload))

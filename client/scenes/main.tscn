@@ -324,56 +324,67 @@ text = "20초 안에 최종 대응을 선택하세요."
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="EndingScreen" type="VBoxContainer" parent="Page"]
+[node name="EndingScreen" type="ScrollContainer" parent="Page"]
 visible = false
 layout_mode = 2
-theme_override_constants/separation = 18
-alignment = 1
+horizontal_scroll_mode = 0
 
-[node name="Header" type="Label" parent="Page/EndingScreen"]
+[node name="Content" type="VBoxContainer" parent="Page/EndingScreen"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 18
+
+[node name="Header" type="Label" parent="Page/EndingScreen/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "임시 직업 엔딩"
 horizontal_alignment = 1
 
-[node name="Occupation" type="Label" parent="Page/EndingScreen"]
+[node name="Occupation" type="Label" parent="Page/EndingScreen/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 34
 text = "직업명"
 horizontal_alignment = 1
 
-[node name="EndingTitle" type="Label" parent="Page/EndingScreen"]
+[node name="EndingTitle" type="Label" parent="Page/EndingScreen/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "칭호"
 horizontal_alignment = 1
 
-[node name="CareerSummary" type="Label" parent="Page/EndingScreen"]
+[node name="CareerSummary" type="Label" parent="Page/EndingScreen/Content"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.78, 0.68, 1)
 text = "직업 위상 · 엔딩 톤"
 horizontal_alignment = 1
 
-[node name="Outcome" type="Label" parent="Page/EndingScreen"]
+[node name="Outcome" type="Label" parent="Page/EndingScreen/Content"]
 layout_mode = 2
 text = "영지 결과"
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="Records" type="Label" parent="Page/EndingScreen"]
+[node name="Epilogue" type="Label" parent="Page/EndingScreen/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.82, 0.78, 1)
+text = "후일담"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Records" type="Label" parent="Page/EndingScreen/Content"]
 layout_mode = 2
 text = "결정적 기록"
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="ShareLine" type="Label" parent="Page/EndingScreen"]
+[node name="ShareLine" type="Label" parent="Page/EndingScreen/Content"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.84, 0.72, 0.42, 1)
 text = "공유 문구"
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="RestartButton" type="Button" parent="Page/EndingScreen"]
+[node name="RestartButton" type="Button" parent="Page/EndingScreen/Content"]
 custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 text = "다시 시작"

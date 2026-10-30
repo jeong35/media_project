@@ -16,6 +16,12 @@ builder.Services.AddHttpClient<OpenAiDialogueProvider>(client =>
     client.BaseAddress = new Uri("https://api.openai.com/v1/"));
 builder.Services.AddTransient<IDialogueProvider>(services => services.GetRequiredService<OpenAiDialogueProvider>());
 builder.Services.AddScoped<DialogueGenerationService>();
+builder.Services.AddSingleton<MockCareerEndingProvider>();
+builder.Services.AddSingleton<ICareerEndingProvider>(services => services.GetRequiredService<MockCareerEndingProvider>());
+builder.Services.AddHttpClient<OpenAiCareerEndingProvider>(client =>
+    client.BaseAddress = new Uri("https://api.openai.com/v1/"));
+builder.Services.AddTransient<ICareerEndingProvider>(services => services.GetRequiredService<OpenAiCareerEndingProvider>());
+builder.Services.AddScoped<CareerEndingGenerationService>();
 builder.Services.AddScoped<MockGameService>();
 
 var app = builder.Build();
