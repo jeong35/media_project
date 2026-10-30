@@ -46,6 +46,18 @@ const API_BASE := "http://127.0.0.1:5050"
 ]
 @onready var farming_feedback: Label = $Page/FarmingScreen/Feedback
 @onready var farming_finish_button: Button = $Page/FarmingScreen/FinishButton
+@onready var final_choice_screen: VBoxContainer = $Page/FinalChoiceScreen
+@onready var final_act_label: Label = $Page/FinalChoiceScreen/ActLabel
+@onready var final_narration: Label = $Page/FinalChoiceScreen/Narration
+@onready var final_timer_label: Label = $Page/FinalChoiceScreen/TimerLabel
+@onready var final_timer_bar: ProgressBar = $Page/FinalChoiceScreen/TimerBar
+@onready var final_choice_buttons: Array[Button] = [
+	$Page/FinalChoiceScreen/Choices/Choice0,
+	$Page/FinalChoiceScreen/Choices/Choice1,
+	$Page/FinalChoiceScreen/Choices/Choice2,
+	$Page/FinalChoiceScreen/Choices/Choice3
+]
+@onready var final_feedback: Label = $Page/FinalChoiceScreen/Feedback
 @onready var ending_screen: VBoxContainer = $Page/EndingScreen
 @onready var occupation: Label = $Page/EndingScreen/Occupation
 @onready var ending_title: Label = $Page/EndingScreen/EndingTitle
@@ -54,6 +66,7 @@ const API_BASE := "http://127.0.0.1:5050"
 @onready var share_line: Label = $Page/EndingScreen/ShareLine
 @onready var restart_button: Button = $Page/EndingScreen/RestartButton
 @onready var http_request: HTTPRequest = $HealthRequest
+@onready var final_choice_timer: Timer = $FinalChoiceTimer
 
 var session_id := ""
 var current_act := 1
@@ -65,7 +78,10 @@ var correct_seeds := 0
 var water_target := "community"
 var farming_method := "manual"
 var smoke_test := false
+var smoke_timeout_test := false
 var smoke_runs := 0
+var final_time_limit := 0.0
+var timeout_choice_id := ""
 
 
 func _ready() -> void:
@@ -74,6 +90,8 @@ func _ready() -> void:
 	restart_button.pressed.connect(_start_new_game)
 	for index in choice_buttons.size():
 		choice_buttons[index].pressed.connect(_submit_choice.bind(index))
+	for index in final_choice_buttons.size():
+		final_choice_buttons[index].pressed.connect(_submit_final_choice.bind(index))
 	for index in obstacle_buttons.size():
 		obstacle_buttons[index].pressed.connect(_remove_obstacle.bind(index))
 	for index in seed_buttons.size():
@@ -84,9 +102,19 @@ func _ready() -> void:
 		method_buttons[index].pressed.connect(_select_method.bind(index))
 	farming_finish_button.pressed.connect(_submit_farming)
 	http_request.request_completed.connect(_on_request_completed)
-	smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
+	final_choice_timer.timeout.connect(_on_final_choice_timeout)
+	smoke_test = "--smoke-test" in OS.get_cmdline_user_args() or "--smoke-timeout" in OS.get_cmdline_user_args()
+	smoke_timeout_test = "--smoke-timeout" in OS.get_cmdline_user_args()
 	if smoke_test:
 		_start_new_game()
+
+
+func _process(_delta: float) -> void:
+	if final_choice_timer.is_stopped():
+		return
+	var remaining := final_choice_timer.time_left
+	final_timer_label.text = "결정까지 %.1f초" % remaining
+	final_timer_bar.value = remaining
 
 
 func _start_new_game() -> void:
@@ -100,7 +128,9 @@ func _start_new_game() -> void:
 	title_screen.show()
 	game_screen.hide()
 	farming_screen.hide()
+	final_choice_screen.hide()
 	ending_screen.hide()
+	final_choice_timer.stop()
 	connection_status.text = "새 세션을 만드는 중…"
 	new_game_button.disabled = true
 	_request_json("start", HTTPClient.METHOD_POST, "/api/v1/sessions", {"mode": "mock"})
@@ -133,7 +163,35 @@ func _submit_choice(index: int) -> void:
 	feedback.text = "선택 결과를 계산하고 있습니다…"
 	_request_json("choice", HTTPClient.METHOD_POST, "/api/v1/sessions/%s/choices" % session_id, {
 		"choiceId": choice_ids[index],
-		"idempotencyKey": _new_uuid()
+		"idempotencyKey": _new_uuid(),
+		"timedOut": false
+	})
+
+
+func _submit_final_choice(index: int) -> void:
+	if index >= choice_ids.size() or final_choice_timer.is_stopped():
+		return
+	final_choice_timer.stop()
+	for button in final_choice_buttons:
+		button.disabled = true
+	final_feedback.text = "시간을 멈추고 최종 결과를 계산하고 있습니다…"
+	_request_json("choice", HTTPClient.METHOD_POST, "/api/v1/sessions/%s/choices" % session_id, {
+		"choiceId": choice_ids[index],
+		"idempotencyKey": _new_uuid(),
+		"timedOut": false
+	})
+
+
+func _on_final_choice_timeout() -> void:
+	for button in final_choice_buttons:
+		button.disabled = true
+	final_timer_label.text = "시간 초과"
+	final_timer_bar.value = 0
+	final_feedback.text = "결정 시간이 끝나 주민 대피를 자동으로 명령합니다…"
+	_request_json("choice", HTTPClient.METHOD_POST, "/api/v1/sessions/%s/choices" % session_id, {
+		"choiceId": timeout_choice_id,
+		"idempotencyKey": _new_uuid(),
+		"timedOut": true
 	})
 
 
@@ -188,6 +246,7 @@ func _show_act(payload: Dictionary, transition_feedback := "") -> void:
 	choices.hide()
 	title_screen.hide()
 	farming_screen.hide()
+	final_choice_screen.hide()
 	ending_screen.hide()
 	game_screen.show()
 	player_input.editable = true
@@ -212,6 +271,11 @@ func _show_dialogue(payload: Dictionary) -> void:
 func _show_choices(payload: Dictionary) -> void:
 	choice_ids.clear()
 	var server_choices: Array = payload.get("choices", [])
+	var time_limit_value: Variant = payload.get("timeLimitSeconds")
+	var time_limit := 0 if time_limit_value == null else int(time_limit_value)
+	if time_limit > 0:
+		_show_final_choices(server_choices, time_limit, str(payload.get("timeoutChoiceId", "")))
+		return
 	for index in choice_buttons.size():
 		choice_buttons[index].disabled = false
 		choice_buttons[index].visible = index < server_choices.size()
@@ -223,6 +287,31 @@ func _show_choices(payload: Dictionary) -> void:
 	if smoke_test:
 		var smoke_choice := 2 if current_act == 1 else 1 if current_act == 2 else 0
 		_submit_choice(smoke_choice)
+
+
+func _show_final_choices(server_choices: Array, time_limit: int, automatic_choice_id: String) -> void:
+	game_screen.hide()
+	farming_screen.hide()
+	ending_screen.hide()
+	final_choice_screen.show()
+	final_act_label.text = act_label.text
+	final_narration.text = "%s\n\n%s: %s" % [narration.text, npc_name.text, npc_dialogue.text]
+	final_feedback.text = "20초 안에 최종 대응을 선택하세요. 서버 응답을 기다리는 동안에는 시간이 흐르지 않습니다."
+	timeout_choice_id = automatic_choice_id
+	for index in final_choice_buttons.size():
+		final_choice_buttons[index].disabled = false
+		final_choice_buttons[index].visible = index < server_choices.size()
+		if index < server_choices.size():
+			var choice: Dictionary = server_choices[index]
+			choice_ids.append(str(choice.get("choiceId", "")))
+			final_choice_buttons[index].text = choice.get("label", "")
+	final_time_limit = 0.2 if smoke_timeout_test else float(time_limit)
+	final_timer_bar.max_value = final_time_limit
+	final_timer_bar.value = final_time_limit
+	final_timer_label.text = "결정까지 %.1f초" % final_time_limit
+	final_choice_timer.start(final_time_limit)
+	if smoke_test and not smoke_timeout_test:
+		_submit_final_choice(1)
 
 
 func _show_choice_result(payload: Dictionary) -> void:
@@ -322,6 +411,10 @@ func _submit_farming() -> void:
 
 func _show_farming_result(payload: Dictionary) -> void:
 	farming_screen.hide()
+	var next_act: Variant = payload.get("nextAct")
+	if next_act is Dictionary:
+		_show_act(next_act, "농사 점수 %s점\n%s" % [payload.get("score", 0), payload.get("feedback", "")])
+		return
 	_show_ending(payload)
 
 
@@ -335,6 +428,8 @@ func _show_ending(payload: Dictionary) -> void:
 	share_line.text = ending.get("shareLine", "")
 	game_screen.hide()
 	farming_screen.hide()
+	final_choice_screen.hide()
+	final_choice_timer.stop()
 	ending_screen.show()
 	if smoke_test:
 		smoke_runs += 1
@@ -352,6 +447,8 @@ func _show_error(message: String) -> void:
 	send_button.disabled = false
 	player_input.editable = true
 	farming_finish_button.disabled = false
+	for button in final_choice_buttons:
+		button.disabled = false
 	push_warning(message)
 	if smoke_test:
 		get_tree().quit(1)

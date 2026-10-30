@@ -255,6 +255,69 @@ custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 text = "농사 결과 확인"
 
+[node name="FinalChoiceScreen" type="VBoxContainer" parent="Page"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ActLabel" type="Label" parent="Page/FinalChoiceScreen"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "ACT 4 · 균열 발생 당일"
+
+[node name="Title" type="Label" parent="Page/FinalChoiceScreen"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "최후의 명령"
+horizontal_alignment = 1
+
+[node name="Narration" type="Label" parent="Page/FinalChoiceScreen"]
+custom_minimum_size = Vector2(0, 90)
+layout_mode = 2
+text = "붉은 균열이 성벽 위로 열렸다."
+autowrap_mode = 2
+
+[node name="TimerLabel" type="Label" parent="Page/FinalChoiceScreen"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.48, 0.38, 1)
+theme_override_font_sizes/font_size = 22
+text = "결정까지 20.0초"
+horizontal_alignment = 1
+
+[node name="TimerBar" type="ProgressBar" parent="Page/FinalChoiceScreen"]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+max_value = 20.0
+value = 20.0
+show_percentage = false
+
+[node name="Choices" type="VBoxContainer" parent="Page/FinalChoiceScreen"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="Choice0" type="Button" parent="Page/FinalChoiceScreen/Choices"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+
+[node name="Choice1" type="Button" parent="Page/FinalChoiceScreen/Choices"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+
+[node name="Choice2" type="Button" parent="Page/FinalChoiceScreen/Choices"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+
+[node name="Choice3" type="Button" parent="Page/FinalChoiceScreen/Choices"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+
+[node name="Feedback" type="Label" parent="Page/FinalChoiceScreen"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.84, 0.72, 0.42, 1)
+text = "20초 안에 최종 대응을 선택하세요."
+horizontal_alignment = 1
+autowrap_mode = 2
+
 [node name="EndingScreen" type="VBoxContainer" parent="Page"]
 visible = false
 layout_mode = 2
@@ -305,3 +368,6 @@ text = "다시 시작"
 
 [node name="HealthRequest" type="HTTPRequest" parent="."]
 timeout = 8.0
+
+[node name="FinalChoiceTimer" type="Timer" parent="."]
+one_shot = true

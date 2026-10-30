@@ -78,7 +78,8 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var session = await FindSessionAsync(sessionId);
         if (session.Phase != "AwaitingChoice") throw new GameRuleException("CHOICES_UNAVAILABLE", "아직 선택지를 확인할 수 없습니다.");
         var act = content.GetAct(session.CurrentAct);
-        return new ChoicesResponse(act.Choices.Select(choice => new ChoiceOptionResponse(choice.ChoiceId, choice.Label)).ToArray());
+        return new ChoicesResponse(act.Choices.Select(choice => new ChoiceOptionResponse(choice.ChoiceId, choice.Label)).ToArray(),
+            act.ChoiceTimeLimitSeconds, act.TimeoutChoiceId);
     }
 
     public async Task<ChoiceResultResponse> SubmitChoiceAsync(Guid sessionId, ChoiceRequest request)
@@ -93,6 +94,8 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         if (session.Phase != "AwaitingChoice") throw new GameRuleException("INVALID_TURN", "현재는 선택지를 제출할 수 없습니다.");
         var choice = act.Choices.SingleOrDefault(candidate => candidate.ChoiceId == request.ChoiceId)
             ?? throw new GameRuleException("INVALID_CHOICE", "허용되지 않은 선택지입니다.");
+        if (request.TimedOut && (act.ChoiceTimeLimitSeconds is null || choice.ChoiceId != act.TimeoutChoiceId))
+            throw new GameRuleException("INVALID_TIMEOUT_CHOICE", "시간 초과 시 지정된 자동 선택지만 제출할 수 있습니다.");
 
         ApplyStateChanges(session, choice.Changes);
         await ApplyAffinityChangesAsync(sessionId, choice.AffinityChanges, selectedAct);
@@ -102,7 +105,14 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         EndingResponse? ending = null;
         NextActResponse? nextAct = null;
         NextActivityResponse? nextActivity = null;
-        if (act.Activity == "farming" && act.Farming is not null)
+        if (act.FinaleRules is not null)
+        {
+            ending = BuildFinalEnding(session, act, choice, request.TimedOut);
+            session.Status = "Completed";
+            session.Phase = "Completed";
+            session.EndingJson = JsonSerializer.Serialize(ending, JsonOptions);
+        }
+        else if (act.Activity == "farming" && act.Farming is not null)
         {
             session.Phase = "AwaitingFarming";
             nextActivity = new NextActivityResponse("farming", act.Farming.Title, act.Farming.Instructions);
@@ -139,7 +149,8 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         if (duplicate is not null) return duplicate;
 
         var session = await FindSessionAsync(sessionId);
-        var act = content.GetAct(session.CurrentAct);
+        var selectedAct = session.CurrentAct;
+        var act = content.GetAct(selectedAct);
         var farming = act.Farming ?? throw new GameRuleException("FARMING_UNAVAILABLE", "현재 장면에는 농사 활동이 없습니다.");
         if (session.Phase != "AwaitingFarming") throw new GameRuleException("INVALID_TURN", "현재는 농사 결과를 제출할 수 없습니다.");
         if (request.RemovedObstacles is < 0 or > 3 || request.CorrectSeeds is < 0 or > 3)
@@ -155,20 +166,34 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var affinities = MergeChanges(waterOutcome.AffinityChanges, methodOutcome.AffinityChanges,
             score >= farming.CompletionThreshold ? farming.CompletionBonus.AffinityChanges : EmptyChanges);
         ApplyStateChanges(session, changes);
-        await ApplyAffinityChangesAsync(sessionId, affinities, session.CurrentAct);
+        await ApplyAffinityChangesAsync(sessionId, affinities, selectedAct);
 
-        var endingContent = act.Ending ?? throw new InvalidOperationException("Act 3 temporary ending content was not found.");
-        var ending = new EndingResponse(endingContent.OccupationName, endingContent.Title, endingContent.TerritoryOutcome,
-            [$"농사 점수 {score}점으로 마력보리밭을 완성했다.", .. endingContent.Records.Take(2)], endingContent.Traits, endingContent.ShareLine);
         var feedbackParts = new List<string> { waterOutcome.Feedback, methodOutcome.Feedback };
         if (score >= farming.CompletionThreshold) feedbackParts.Add(farming.CompletionBonus.Feedback);
-        var response = new FarmingResultResponse(score, string.Join(" ", feedbackParts), changes, ToStateResponse(session), ending);
+        EndingResponse? ending = null;
+        NextActResponse? nextAct = null;
+        if (act.Ending is not null)
+        {
+            ending = new EndingResponse(act.Ending.OccupationName, act.Ending.Title, act.Ending.TerritoryOutcome,
+                [$"농사 점수 {score}점으로 마력보리밭을 완성했다.", .. act.Ending.Records.Take(2)], act.Ending.Traits, act.Ending.ShareLine);
+            session.Status = "Completed";
+            session.Phase = "Completed";
+            session.EndingJson = JsonSerializer.Serialize(ending, JsonOptions);
+        }
+        else
+        {
+            var nextContent = content.GetAct(session.CurrentAct + 1);
+            session.CurrentAct = nextContent.Act;
+            session.CurrentTurn = 0;
+            session.Phase = "AwaitingDialogue";
+            if (!await database.NpcStates.AnyAsync(state => state.SessionId == sessionId && state.NpcId == nextContent.Scene.NpcId))
+                database.NpcStates.Add(new NpcState { SessionId = sessionId, NpcId = nextContent.Scene.NpcId, Trust = 20 });
+            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, 1);
+        }
+        var response = new FarmingResultResponse(score, string.Join(" ", feedbackParts), changes, ToStateResponse(session), nextAct, ending);
 
-        session.Status = "Completed";
-        session.Phase = "Completed";
-        session.EndingJson = JsonSerializer.Serialize(ending, JsonOptions);
         session.UpdatedAt = DateTimeOffset.UtcNow;
-        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "FarmingCompleted", session.CurrentAct, response, request.IdempotencyKey));
+        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "FarmingCompleted", selectedAct, response, request.IdempotencyKey));
         await database.SaveChangesAsync();
         return response;
     }
@@ -219,6 +244,35 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
     }
 
     private static readonly IReadOnlyDictionary<string, int> EmptyChanges = new Dictionary<string, int>();
+
+    private static EndingResponse BuildFinalEnding(GameSession session, MockActContent act, ChoiceContent choice, bool timedOut)
+    {
+        var rules = act.FinaleRules ?? throw new InvalidOperationException("Finale rules were not found.");
+        var intended = choice.FinalOutcome ?? throw new InvalidOperationException($"Final outcome was not found: {choice.ChoiceId}");
+        var state = ToStateResponse(session);
+        var preparedCount = new[] { state.Military, state.Treasury, state.Legitimacy, state.Ward }
+            .Count(value => value >= rules.PreparedStateThreshold);
+        var requirementsMet = intended.Requirements.All(requirement => GetStateValue(state, requirement.Key) >= requirement.Value);
+        var evacuation = choice.ChoiceId == act.TimeoutChoiceId;
+        var outcome = evacuation || requirementsMet && preparedCount >= rules.RequiredPreparedStates
+            ? intended
+            : state.Legitimacy >= rules.DamagedSurvivalLegitimacy ? rules.DamagedSurvival : rules.Destroyed;
+        var timingRecord = timedOut
+            ? "결정 시간이 끝나 주민 대피 명령이 자동으로 내려졌다."
+            : choice.ResultNarration;
+        return new EndingResponse(outcome.OccupationName, outcome.Title, outcome.TerritoryOutcome,
+            [timingRecord, $"최종 준비 상태: 군사 {state.Military}, 재정 {state.Treasury}, 정통성 {state.Legitimacy}, 봉인 {state.Ward}",
+                $"준비 기준을 충족한 핵심 상태는 {preparedCount}개였다."], outcome.Traits, outcome.ShareLine, outcome.TerritoryFateId);
+    }
+
+    private static int GetStateValue(GameStateResponse state, string id) => id switch
+    {
+        "military" => state.Military,
+        "treasury" => state.Treasury,
+        "legitimacy" => state.Legitimacy,
+        "ward" => state.Ward,
+        _ => throw new InvalidOperationException($"Unknown final requirement: {id}")
+    };
 
     private static IReadOnlyDictionary<string, int> MergeChanges(params IReadOnlyDictionary<string, int>[] sources)
     {

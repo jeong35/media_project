@@ -92,16 +92,5 @@
       "changes": { "treasury": 5 },
       "affinityChanges": { "commerce": 3 }
     }
-  },
-  "ending": {
-    "occupationName": "흙을 아는 견습 영주",
-    "title": "멸망을 준비하며 오늘의 밭을 일군 자",
-    "territoryOutcome": "마력보리와 주민의 신뢰를 얻은 영지",
-    "records": [
-      "리아와 균열 대응의 주력 전략을 선택했다.",
-      "마르타와 주민 공동밭의 마력보리를 길렀다."
-    ],
-    "traits": ["다정함", "실리", "생활력"],
-    "shareLine": "그는 멸망의 날을 준비하면서도 오늘 심을 씨앗을 잊지 않았다."
   }
 }
