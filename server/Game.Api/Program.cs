@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<GameDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("GameDb") ?? "Data Source=game.db"));
 builder.Services.AddSingleton(MockContentLoader.Load());
+builder.Services.AddSingleton(NpcPersonaCatalog.Load());
 builder.Services.AddSingleton<MockDialogueProvider>();
 builder.Services.AddSingleton<IDialogueProvider>(services => services.GetRequiredService<MockDialogueProvider>());
 builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("OpenAI"));

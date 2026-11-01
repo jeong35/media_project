@@ -45,6 +45,7 @@ results.Add(await RunLiveProviderScenarioAsync(content, new StubDialogueProvider
     "openai", false, 2));
 results.Add(await RunLiveProviderScenarioAsync(content, new StubDialogueProvider("openai", StubProviderBehavior.PermanentFailure),
     "fixed_fallback", true, 1));
+results.Add(RunPersonaPromptBoundary());
 results.Add(await RunOpenAiHttpContractAsync(content));
 results.Add(await RunOpenAiQuotaFallbackAsync(content));
 results.Add(await RunLiveCareerEndingScenarioAsync(content, CareerStubBehavior.Success,
@@ -245,12 +246,18 @@ static async Task<TestResult> RunOpenAiHttpContractAsync(MockGameContent content
         {
             ApiKey = "test-placeholder", Model = "test-model", TimeoutSeconds = 2, MaxOutputTokens = 300
         }));
+        var personaJson = NpcPersonaPromptBuilder.Build(NpcPersonaCatalog.Load().Get("steward_edwin"));
         var raw = await provider.GenerateAsync(new DialogueProviderRequest(content.GetAct(1), "주민을 먼저 지킨다.",
-            "none", 1, ["kind", "pragmatic"]));
+            "none", 1, ["kind", "pragmatic"], personaJson));
         var parsed = JsonSerializer.Deserialize<GeneratedDialogue>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var requestDocument = JsonDocument.Parse(handler.RequestBody!);
+        var prompt = requestDocument.RootElement.GetProperty("input")[1].GetProperty("content").GetString()!;
         var requestOk = handler.RequestBody?.Contains("\"json_schema\"") == true
             && handler.RequestBody.Contains("\"additionalProperties\":false")
             && !handler.RequestBody.Contains("maxLength")
+            && prompt.Contains("core_traits") && prompt.Contains("결론부터 말한다")
+            && !prompt.Contains("hidden_traits") && !prompt.Contains("backstory_elements")
+            && !prompt.Contains("career_influence_weights") && !prompt.Contains("disclosure_policy")
             && handler.AuthorizationScheme == "Bearer" && handler.RequestUri?.AbsolutePath == "/v1/responses";
         var passed = handler.CallCount == 1 && requestOk && parsed?.Dialogue == generated.Dialogue;
         return new TestResult("OpenAI HTTP 계약", expected,
@@ -260,6 +267,32 @@ static async Task<TestResult> RunOpenAiHttpContractAsync(MockGameContent content
     catch (Exception error)
     {
         return new TestResult("OpenAI HTTP 계약", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static TestResult RunPersonaPromptBoundary()
+{
+    const string expected = "공개 필드 포함/숨김·판정 필드 제외";
+    try
+    {
+        var persona = NpcPersonaCatalog.Load().Get("steward_edwin");
+        var prompt = NpcPersonaPromptBuilder.Build(persona);
+        var rawPath = Path.Combine(AppContext.BaseDirectory, "data", "npc", "Edwin.json");
+        var raw = File.ReadAllText(rawPath);
+        var publicFieldsIncluded = prompt.Contains("core_traits") && prompt.Contains("speech_style")
+            && prompt.Contains("behavior_rules") && prompt.Contains("결론부터 말한다");
+        var privateFieldsExistInSource = raw.Contains("hidden_traits") && raw.Contains("backstory_elements");
+        var privateFieldsExcluded = !prompt.Contains("hidden_traits") && !prompt.Contains("backstory_elements")
+            && !prompt.Contains("career_influence_weights") && !prompt.Contains("career_influence_rules")
+            && !prompt.Contains("disclosure_policy") && !prompt.Contains("game_function");
+        var passed = persona.DisclosurePolicy == "progressive_relationship" && publicFieldsIncluded
+            && privateFieldsExistInSource && privateFieldsExcluded;
+        return new TestResult("NPC 공개 페르소나 경계", expected, passed ? expected : "필드 경계 불일치",
+            persona.Id, passed, passed ? null : "대화 프롬프트가 공개 필드만 포함하지 않습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("NPC 공개 페르소나 경계", expected, error.GetType().Name, "-", false, error.Message);
     }
 }
 
@@ -559,7 +592,7 @@ sealed class GameFixture : IAsyncDisposable
         await database.Database.EnsureCreatedAsync();
         var providers = new List<IDialogueProvider> { new MockDialogueProvider() };
         if (liveProvider is not null) providers.Add(liveProvider);
-        var dialogueGeneration = new DialogueGenerationService(providers);
+        var dialogueGeneration = new DialogueGenerationService(providers, NpcPersonaCatalog.Load());
         var endingProviders = new List<ICareerEndingProvider> { new MockCareerEndingProvider() };
         if (liveEndingProvider is not null) endingProviders.Add(liveEndingProvider);
         var careerEndingGeneration = new CareerEndingGenerationService(endingProviders);

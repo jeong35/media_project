@@ -7,7 +7,7 @@ public sealed record GeneratedDialogue(string Dialogue, string Emotion, string F
 public sealed record DialogueGenerationResult(GeneratedDialogue Content, string ResponseSource,
     bool FallbackUsed, int AttemptCount);
 public sealed record DialogueProviderRequest(MockActContent Act, string PlayerText,
-    string FailureScenario, int Attempt, IReadOnlyList<string> AllowedTags);
+    string FailureScenario, int Attempt, IReadOnlyList<string> AllowedTags, string PublicPersonaJson);
 
 public interface IDialogueProvider
 {
@@ -45,7 +45,7 @@ public sealed class MockDialogueProvider : IDialogueProvider
     }
 }
 
-public sealed class DialogueGenerationService(IEnumerable<IDialogueProvider> providers)
+public sealed class DialogueGenerationService(IEnumerable<IDialogueProvider> providers, NpcPersonaCatalog personaCatalog)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IReadOnlyDictionary<string, IDialogueProvider> providersById = providers
@@ -58,13 +58,15 @@ public sealed class DialogueGenerationService(IEnumerable<IDialogueProvider> pro
         if (!providersById.TryGetValue(providerId, out var provider))
             return FixedFallback(act, 0);
 
+        var publicPersonaJson = NpcPersonaPromptBuilder.Build(personaCatalog.Get(act.Scene.NpcId));
         var maximumAttempts = Math.Clamp(provider.MaximumAttempts, 1, 3);
         for (var attempt = 1; attempt <= maximumAttempts; attempt++)
         {
             try
             {
                 var raw = await provider.GenerateAsync(
-                    new DialogueProviderRequest(act, playerText, failureScenario, attempt, allowedTags), cancellationToken);
+                    new DialogueProviderRequest(act, playerText, failureScenario, attempt, allowedTags, publicPersonaJson),
+                    cancellationToken);
                 var generated = JsonSerializer.Deserialize<GeneratedDialogue>(raw, JsonOptions)
                     ?? throw new JsonException("Dialogue payload was empty.");
                 Validate(generated, allowedTags);

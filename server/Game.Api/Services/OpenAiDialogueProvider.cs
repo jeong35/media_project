@@ -67,12 +67,14 @@ public sealed class OpenAiDialogueProvider(HttpClient httpClient, IOptions<OpenA
             {
                 role = "developer",
                 content = "당신은 한국어 판타지 게임의 NPC 대사 생성기다. 주어진 장면과 플레이어 발화에만 반응한다. " +
-                    "능력치 변화, 성공 여부, 다음 Act, 영지 운명과 직업을 결정하지 않는다. 허용된 성향 태그만 반환한다."
+                    "능력치 변화, 성공 여부, 다음 Act, 영지 운명과 직업을 결정하지 않는다. 허용된 성향 태그만 반환한다. " +
+                    "제공된 공개 페르소나만 사용하며 과거사나 숨겨진 성향을 추측하거나 새로 만들지 않는다."
             },
             new
             {
                 role = "user",
-                content = $"NPC: {request.Act.Scene.NpcName}\n장면: {request.Act.Scene.Narration}\n" +
+                content = $"공개 NPC 페르소나(JSON): {request.PublicPersonaJson}\n" +
+                    $"NPC: {request.Act.Scene.NpcName}\n장면: {request.Act.Scene.Narration}\n" +
                     $"NPC의 첫 대사: {request.Act.Scene.OpeningDialogue}\n플레이어 발화: {request.PlayerText}"
             }
         },

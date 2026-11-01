@@ -70,10 +70,7 @@
   ],
   "hidden_traits": [],
   "backstory_elements": [],
-  "disclosure_rules": [
-    "hidden_traits를 처음 만난 플레이어에게 직접 말하지 않는다.",
-    "신뢰도가 높거나 관련 사건이 발생했을 때만 간접적으로 드러낸다."
-  ],
+  "disclosure_policy": "progressive_relationship",
   "career_influence_weights": {
     "martial": 0.0,
     "arcane": 1.0,
