@@ -169,7 +169,7 @@ text = "주민 공동밭"
 custom_minimum_size = Vector2(180, 44)
 layout_mode = 2
 toggle_mode = true
-text = "봉화 연료밭"
+text = "결계핵 동력밭"
 
 [node name="Market" type="Button" parent="Page/FarmingScreen/WaterChoices"]
 custom_minimum_size = Vector2(180, 44)

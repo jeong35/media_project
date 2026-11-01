@@ -59,7 +59,7 @@ Mock 모드도 실제 API와 같은 JSON 계약을 사용한다. 향후 OpenAI P
 | 선택 | 핵심 변화 | 직업 적성 변화 |
 | --- | --- | --- |
 | 기사단 재건 | 군사 +20, 재정 -10 | 전투 +8, 지도력 +3 |
-| 봉화 수리 | 봉인 +20, 재정 -10 | 마법 +8, 지도력 +3 |
+| 결계핵 복구 | 봉인 +20, 재정 -10 | 마법 +8, 지도력 +3 |
 | 주민 대피로 정비 | 정통성 +20, 재정 -5 | 지도력 +8, 외교 +3 |
 
 Act 1~2 선택 결과는 다음 Act를 반환하며 상태와 적성을 누적한다. Act 3에서는 마르타와 농사 준비 방향을 정한 뒤 장애물 제거, 씨앗 배치, 물 배분과 작업 방식을 제출한다. 서버는 장애물 1개당 10점, 올바른 씨앗 1칸당 20점으로 계산하고 선택한 방식에 맞는 상태와 적성을 적용한다.
@@ -119,7 +119,7 @@ GET  /api/v1/sessions/{id}
 - 서로 다른 Godot 프로세스 사이에서 대화 전, 선택 대기, 농사 대기 상태 복구
 - 완료 세션을 다시 열어 기존 직업 엔딩 복구
 - 기사단 선택 후 군사 20에서 40으로 변경
-- 봉화 선택 후 봉인 10에서 30으로 변경
+- 결계핵 선택 후 봉인 10에서 30으로 변경
 - 대피로 선택 후 정통성 25에서 45로 변경
 
 ### 6.3 안정성 경로
@@ -173,13 +173,13 @@ GET  /api/v1/sessions/{id}
 | 경로 | 운명 / 위상 / 톤 / 직업 | 결과 |
 | --- | --- | --- |
 | 기사단 방어 전설 | self_saved / legendary / prestige / 구국의 기사단장 | PASS |
-| 봉인식 전설 | self_saved / legendary / prestige / 세 봉화의 마탑주 | PASS |
-| 일반 봉인식 | self_saved / accomplished / orthodox / 북부 봉화술사 | PASS |
+| 봉인식 전설 | self_saved / legendary / prestige / 대결계의 마탑주 | PASS |
+| 일반 봉인식 | self_saved / accomplished / orthodox / 북부 결계술사 | PASS |
 | 마법·제작 복합 업적 | self_saved / accomplished / b_grade / 균열 봉합 농기구 명장 | PASS |
 | 외교·제작 복합 업적 | external_aid / accomplished / unexpected / 왕국 공인 농기구 외교관 | PASS |
 | 피해 생존 | damaged_survival / survivor / orthodox / 피난민의 길잡이 | PASS |
 | 시간 초과 대피 | people_evacuated / survivor / orthodox / 피난민의 길잡이 | PASS |
-| 영지 멸망 | destroyed / fallen / orthodox / 유랑 봉화 연구자 | PASS |
+| 영지 멸망 | destroyed / fallen / orthodox / 유랑 결계 연구자 | PASS |
 
 ### 6.6 대화 생성 실패 복구
 
@@ -215,6 +215,18 @@ Mock과 Live는 같은 엔딩 응답을 사용하며 `generationSource`, `genera
 최종 일러스트 제작 전에 공통 색상, 버튼, 입력창, 패널과 제한시간 막대를 `game_theme.tres`로 분리했다. 대화 화면은 전체 배경 위에 NPC 반신 이미지를 띄우고 하단에 이름·감정·대사를 표시하는 비주얼 노벨 구조로 변경했다. `backgroundId`는 `assets/backgrounds`, `npcId`와 `npcEmotion`은 `assets/characters` 아래 파일 경로로 자동 변환한다. 정확한 표정 파일이 없으면 `neutral` 이미지를 사용하며, 아직 이미지가 전혀 없을 때만 임시 슬롯을 표시한다.
 
 NPC 답변과 행동 근거를 읽기 전에 선택지가 같은 상자를 차지하지 않도록 화면 단계를 분리했다. 답변 뒤에는 `선택지 보기` 버튼만 표시하고, 이를 누르면 대화창이 사라진 뒤 별도 선택 패널이 열린다. 실제 Godot 960×540 창에서 에드윈의 첫 대화, 감정 변화, 행동 근거와 세 선택지 화면을 각각 확인했으며 전체 Mock 완주·재시작 스모크 테스트도 통과했다.
+
+### 6.10 캐릭터별 NPC 페르소나 데이터
+
+주인공 요약과 에드윈·리아·마르타의 말투, 가치관, 행동 규칙을 `data/` 아래 JSON으로 분리했다. NPC는 캐릭터마다 하나의 파일로 관리하며, 장면 콘텐츠와 같은 NPC ID를 사용한다. 기사·마법사·주민 같은 분류는 각 파일의 `archetype`으로 표현한다. 플레이어는 여섯 공통 `career_affinities`를 유지하고, NPC에는 `career_influence_weights`와 행동별 `career_influence_rules`를 두어 관계 형성 방식이 플레이어 진로에 미치는 영향을 분리했다.
+
+메인 스토리 확정 전이므로 `hidden_traits`와 `backstory_elements`는 비워 두었다. 숨겨진 설정이 첫 대화에서 노출되지 않도록 각 NPC에 `disclosure_rules`를 두었으며, 실제 AI 프롬프트 연결은 공개 조건과 관계 상태를 함께 전달할 수 있을 때 진행한다.
+
+### 6.11 직업 영향 축과 대결계 용어 정리
+
+NPC 관계가 특정 직업명을 직접 부여하지 않도록 플레이어 적성을 전투·마법·외교·상업·지도력·제작 여섯 축으로 통일했다. NPC별 가중치는 영향 가능성만 나타내며, 실제 적성 변화는 대화나 선택에서 대응 행동 신호가 확인될 때 적용한다.
+
+기존의 봉화는 기능을 직관적으로 전달하기 어려워 `결계탑`, `결계핵`, `대결계 마법진`으로 나눴다. 결계탑은 시설, 결계핵은 탑을 작동시키는 마법 아티팩트, 대결계 마법진은 세 결계탑이 연결되어 형성하는 최종 방어 체계다. 저장 데이터 호환을 위해 `repair_beacon`, `north_beacon_ruins` 같은 내부 ID는 유지하고 사용자 노출 문구만 교체했다.
 
 ## 7. 문제와 해결
 
@@ -253,6 +265,7 @@ NPC 답변과 행동 근거를 읽기 전에 선택지가 같은 상자를 차�
 - 서버 판정을 보존하는 생성형 직업명·후일담 표현 계층
 - 후일담 후보 3개 검증·점수화와 선택 근거 추적
 - 최종 일러스트를 독립적으로 교체할 수 있는 비주얼 노벨 배경·표정 슬롯
+- 캐릭터별 NPC 페르소나와 숨겨진 설정 공개 규칙의 데이터 기반
 - 의존성 취약점 탐지와 해결
 
 ## 9. 한계와 다음 작업
@@ -297,10 +310,4 @@ Godot 실행:
 
 ```bash
 dotnet run --project tests/Game.Rules.Tests/Game.Rules.Tests.csproj
-```
-
-PDF 재생성:
-
-```bash
-python3 tools/generate_development_report.py
 ```

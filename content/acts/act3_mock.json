@@ -60,7 +60,7 @@
         "affinityChanges": { "leadership": 2 }
       },
       "ward": {
-        "feedback": "마력보리를 봉화 연료용으로 길러 봉인 준비가 늘었다.",
+        "feedback": "마력보리를 결계핵의 비상 동력원으로 길러 대결계 준비가 늘었다.",
         "changes": { "ward": 8 },
         "affinityChanges": { "arcane": 2 }
       },

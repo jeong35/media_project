@@ -6,7 +6,7 @@
     "npcId": "mage_lia",
     "npcName": "리아",
     "npcEmotion": "nervous",
-    "narration": "첫 복구 명령이 내려진 뒤, 북부 봉화탑의 균열 감지석이 희미하게 울렸다. 견습 마법사 리아는 깨진 석판을 안고 영주를 기다린다.",
+    "narration": "첫 복구 명령이 내려진 뒤, 북부 결계탑의 손상된 결계핵이 희미하게 울렸다. 견습 마법사 리아는 깨진 마법진 석판을 안고 영주를 기다린다.",
     "openingDialogue": "감지석이 반응했어요. 군사 훈련, 봉인 연구, 외부 지원을 모두 준비할 시간은 없습니다. 무엇을 중심으로 계획할까요?"
   },
   "mockDialogue": {
@@ -29,8 +29,8 @@
     },
     {
       "choiceId": "research_ward",
-      "label": "B. 봉화 수리와 균열 봉인 연구에 투자한다.",
-      "resultNarration": "리아의 작업대에 꺼진 봉화석과 균열 계산식이 밤새 쌓였다.",
+      "label": "B. 결계핵 복구와 균열 봉인 연구에 투자한다.",
+      "resultNarration": "리아의 작업대에 손상된 결계핵과 대결계 계산식이 밤새 쌓였다.",
       "feedback": "봉인 준비가 크게 진전됐지만 연구 재료에 자금이 필요했다.",
       "changes": { "ward": 25, "treasury": -10 },
       "affinityChanges": { "arcane": 10, "craft": 3 },

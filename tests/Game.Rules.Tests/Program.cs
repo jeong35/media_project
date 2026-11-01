@@ -14,11 +14,11 @@ var scenarios = new[]
     new FateScenario("자력 생존-기사단", "rebuild_knights", "train_defenders", "farm_with_residents",
         "community", "manual", "final_defense", false, "self_saved", "legendary", "prestige", "martial", "구국의 기사단장"),
     new FateScenario("자력 생존-봉인식", "prepare_evacuation", "research_ward", "farm_with_residents",
-        "community", "manual", "final_ward", false, "self_saved", "accomplished", "orthodox", "leadership", "북부 봉화술사"),
+        "community", "manual", "final_ward", false, "self_saved", "accomplished", "orthodox", "leadership", "북부 결계술사"),
     new FateScenario("외부 지원", "prepare_evacuation", "seek_allies", "improve_farm_tools",
         "market", "tools", "final_external_aid", false, "external_aid", "accomplished", "unexpected", "diplomacy", "왕국 공인 농기구 외교관"),
     new FateScenario("전설 위상-봉인식", "prepare_evacuation", "research_ward", "test_magic_irrigation",
-        "ward", "magic", "final_ward", false, "self_saved", "legendary", "prestige", "arcane", "세 봉화의 마탑주"),
+        "ward", "magic", "final_ward", false, "self_saved", "legendary", "prestige", "arcane", "대결계의 마탑주"),
     new FateScenario("B급 톤-마력 농기구", "prepare_evacuation", "research_ward", "improve_farm_tools",
         "ward", "tools", "final_ward", false, "self_saved", "accomplished", "b_grade", "arcane", "균열 봉합 농기구 명장"),
     new FateScenario("피해 생존", "prepare_evacuation", "research_ward", "farm_with_residents",
@@ -26,7 +26,7 @@ var scenarios = new[]
     new FateScenario("시간 초과 대피", "repair_beacon", "research_ward", "test_magic_irrigation",
         "ward", "magic", "final_evacuate", true, "people_evacuated", "survivor", "orthodox", "arcane", "피난민의 길잡이"),
     new FateScenario("영지 멸망", "repair_beacon", "research_ward", "test_magic_irrigation",
-        "ward", "magic", "final_defense", false, "destroyed", "fallen", "orthodox", "arcane", "유랑 봉화 연구자")
+        "ward", "magic", "final_defense", false, "destroyed", "fallen", "orthodox", "arcane", "유랑 결계 연구자")
 };
 
 var content = MockContentLoader.Load();

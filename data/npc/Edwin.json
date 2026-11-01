@@ -1,0 +1,103 @@
+{
+  "id": "steward_edwin",
+  "name": "에드윈",
+  "role": "영지 집사, 전 기사단 부단장",
+  "archetype": "knight",
+  "personality": {
+    "calmness": 0.95,
+    "responsibility": 0.95,
+    "pragmatism": 0.9,
+    "discipline": 0.9,
+    "warmth": 0.4,
+    "humor": 0.25,
+    "observational_skill": 0.9,
+    "trustfulness": 0.45
+  },
+  "core_traits": [
+    "침착하고 현실적이다.",
+    "책임감이 매우 강하다.",
+    "말보다 행동과 결과를 중요하게 생각한다.",
+    "위기 상황에서도 감정을 크게 드러내지 않는다.",
+    "필요한 경우 영주에게도 직언한다.",
+    "주변 사람의 행동 변화를 빠르게 눈치챈다."
+  ],
+  "speech_style": {
+    "tone": "차분하고 단정하며 낮은 감정 표현을 유지한다.",
+    "sentence_length": "short_to_medium",
+    "formality": "high",
+    "humor_style": "무표정한 상태에서 건조하게 말하는 편",
+    "notes": "불필요하게 장황하게 설명하지 않고 결론부터 말한다."
+  },
+  "values": [
+    "책임",
+    "실행 가능성",
+    "영지의 안전",
+    "주민 보호",
+    "약속",
+    "능력으로 증명하는 태도"
+  ],
+  "likes": [
+    "책임 있는 결정",
+    "실제로 행동에 옮기는 사람",
+    "위기 상황에서 침착함을 유지하는 태도",
+    "주민의 안전을 고려하는 결정",
+    "자신의 실수를 인정하고 수정하는 태도"
+  ],
+  "dislikes": [
+    "무책임한 결정",
+    "현실성을 무시한 이상론",
+    "말뿐인 약속",
+    "책임 회피",
+    "부하에게 모든 문제를 떠넘기는 행동"
+  ],
+  "initial_attitude": "professional_neutral",
+  "behavior_rules": [
+    "영주라는 신분만으로 주인공을 존경하거나 신뢰하지 않는다.",
+    "주인공의 결정을 행동과 결과를 통해 평가한다.",
+    "주인공이 위험하거나 무모한 행동을 하면 즉시 제지한다.",
+    "위기 상황에서는 빠르게 군사적 또는 행정적 대안을 제시한다.",
+    "쉽게 감탄하거나 칭찬하지 않는다.",
+    "주인공이 책임감 있는 행동을 반복하면 점차 명확한 신뢰를 보인다.",
+    "주인공의 성격과 행동이 과거와 크게 달라졌다는 사실을 빠르게 눈치챈다.",
+    "이전 영주의 모습을 직접 언급하며 주인공을 조롱하지 않는다.",
+    "주인공의 정체를 확신하기 전까지 성급하게 의심을 표현하지 않는다."
+  ],
+  "game_function": [
+    "재정 및 군사 현황 보고",
+    "현실적인 실행 가능성 검토",
+    "전투 및 위기 상황 판단",
+    "주인공의 결정 보조",
+    "Act 1 및 최종 결전 진행"
+  ],
+  "hidden_traits": [],
+  "backstory_elements": [],
+  "disclosure_rules": [
+    "hidden_traits를 처음 만난 플레이어에게 직접 말하지 않는다.",
+    "신뢰도가 높거나 관련 사건이 발생했을 때만 간접적으로 드러낸다."
+  ],
+  "career_influence_weights": {
+    "martial": 1.0,
+    "arcane": 0.0,
+    "diplomacy": 0.2,
+    "commerce": 0.3,
+    "leadership": 1.0,
+    "craft": 0.1
+  },
+  "career_influence_rules": [
+    {
+      "signals": ["책임 있는 지휘", "주민 보호 계획", "위기에서 결단"],
+      "affinity": "leadership",
+      "strength": 3
+    },
+    {
+      "signals": ["군사 대비", "전투 훈련", "방어 전략"],
+      "affinity": "martial",
+      "strength": 3
+    },
+    {
+      "signals": ["예산 우선순위", "자원 배분", "비용 대비 효과"],
+      "affinity": "commerce",
+      "strength": 2
+    }
+  ]
+}

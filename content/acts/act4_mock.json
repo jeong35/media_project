@@ -6,7 +6,7 @@
     "npcId": "steward_edwin",
     "npcName": "에드윈",
     "npcEmotion": "urgent",
-    "narration": "붉게 갈라진 하늘 아래 세 봉화가 흔들렸다. 성벽 너머로 마력 폭풍이 다가오고, 성문 앞에는 명령을 기다리는 병사와 주민이 뒤섞였다.",
+    "narration": "붉게 갈라진 하늘 아래 세 결계탑의 결계핵이 불안정하게 떨렸다. 성벽 너머로 마력 폭풍이 다가오고, 성문 앞에는 명령을 기다리는 병사와 주민이 뒤섞였다.",
     "openingDialogue": "영주님, 균열이 예상보다 빠르게 무너지고 있습니다. 지금 내리는 명령이 영지의 마지막 기록이 될 수도 있습니다."
   },
   "mockDialogue": {
@@ -39,8 +39,8 @@
     },
     {
       "choiceId": "final_ward",
-      "label": "B. 세 봉화를 연결해 균열 봉인식을 완성한다.",
-      "resultNarration": "세 봉화의 빛이 이어지며 붉은 균열을 감쌌다.",
+      "label": "B. 세 결계핵을 연결해 대결계 마법진을 완성한다.",
+      "resultNarration": "세 결계탑에서 뻗은 빛이 대결계 마법진을 이루며 붉은 균열을 감쌌다.",
       "feedback": "리아와 축적한 봉인 연구가 하늘을 붙잡았다.",
       "changes": {},
       "affinityChanges": { "arcane": 8, "leadership": 4 },
@@ -48,8 +48,8 @@
       "finalOutcome": {
         "requirements": { "ward": 35 },
         "territoryFateId": "self_saved",
-        "occupationName": "북부 봉화술사",
-        "title": "세 봉화의 불을 다시 이은 자",
+        "occupationName": "북부 결계술사",
+        "title": "대결계 마법진을 완성한 자",
         "territoryOutcome": "봉인식을 완성해 스스로 균열을 닫은 영지",
         "traits": ["통찰", "마법", "집중력"],
         "shareLine": "그는 꺼져 가던 세 빛을 이어 멸망의 하늘을 봉합했다.",
@@ -78,7 +78,7 @@
     {
       "choiceId": "final_evacuate",
       "label": "D. 영지를 포기하고 주민 전원 대피를 명령한다.",
-      "resultNarration": "봉화보다 먼저 대피 종이 울리고 주민 행렬이 남쪽 길로 향했다.",
+      "resultNarration": "대결계보다 먼저 대피 종이 울리고 주민 행렬이 남쪽 길로 향했다.",
       "feedback": "성벽과 들판은 남겨 두었지만 사람들은 다음 계절을 맞을 수 있게 됐다.",
       "changes": {},
       "affinityChanges": { "leadership": 8, "diplomacy": 3 },
@@ -173,12 +173,12 @@
         },
         "arcane": {
           "displayName": "마법",
-          "evidence": "봉화와 균열 연구를 통해 마법 문제 해결력을 쌓았다.",
+          "evidence": "결계핵과 균열 연구를 통해 마법 문제 해결력을 쌓았다.",
           "occupations": {
-            "fallen": "유랑 봉화 연구자",
+            "fallen": "유랑 결계 연구자",
             "survivor": "균열 감시 마법사",
-            "accomplished": "북부 봉화술사",
-            "legendary": "세 봉화의 마탑주"
+            "accomplished": "북부 결계술사",
+            "legendary": "대결계의 마탑주"
           }
         },
         "diplomacy": {
@@ -213,7 +213,7 @@
         },
         "craft": {
           "displayName": "제작",
-          "evidence": "농사와 봉인 준비에 실용적인 도구와 기술을 적용했다.",
+          "evidence": "농사와 대결계 준비에 실용적인 도구와 기술을 적용했다.",
           "occupations": {
             "fallen": "유랑 수리공",
             "survivor": "생존 장인",

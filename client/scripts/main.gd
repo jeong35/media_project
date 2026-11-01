@@ -709,7 +709,7 @@ func _translate_emotion(emotion_id: String) -> String:
 func _translate_background(background_id: String) -> String:
 	return {
 		"study_night": "밤의 영주 집무실",
-		"north_beacon_ruins": "북부 봉화 유적",
+		"north_beacon_ruins": "북부 결계탑 유적",
 		"community_barley_field": "마력보리 공동밭",
 		"cracked_sky_castle_wall": "균열 아래 성벽"
 	}.get(background_id, background_id.replace("_", " "))

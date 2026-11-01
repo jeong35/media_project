@@ -12,5 +12,6 @@
 
   <ItemGroup>
     <Content Include="../../content/**/*.json" Link="content/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../data/**/*.json" Link="data/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
