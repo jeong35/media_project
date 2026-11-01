@@ -8,22 +8,29 @@ const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 @onready var new_game_button: Button = $Page/TitleScreen/NewGameButton
 @onready var continue_button: Button = $Page/TitleScreen/ContinueButton
 @onready var connection_status: Label = $Page/TitleScreen/ConnectionStatus
-@onready var game_screen: VBoxContainer = $Page/GameScreen
-@onready var act_label: Label = $Page/GameScreen/ActLabel
-@onready var narration: Label = $Page/GameScreen/Narration
-@onready var npc_name: Label = $Page/GameScreen/NpcStage/DialoguePanel/Content/NpcName
-@onready var npc_dialogue: Label = $Page/GameScreen/NpcStage/DialoguePanel/Content/NpcDialogue
-@onready var npc_initial: Label = $Page/GameScreen/NpcStage/Portrait/Content/Initial
-@onready var npc_emotion: Label = $Page/GameScreen/NpcStage/Portrait/Content/Emotion
-@onready var scene_id_label: Label = $Page/GameScreen/NpcStage/Portrait/Content/SceneId
-@onready var player_input: TextEdit = $Page/GameScreen/PlayerInput
-@onready var send_button: Button = $Page/GameScreen/SendButton
-@onready var feedback: Label = $Page/GameScreen/Feedback
-@onready var choices: VBoxContainer = $Page/GameScreen/Choices
+@onready var game_screen: Control = $GameScreen
+@onready var background_fallback: ColorRect = $GameScreen/BackgroundFallback
+@onready var background_image: TextureRect = $GameScreen/BackgroundImage
+@onready var character_image: TextureRect = $GameScreen/CharacterImage
+@onready var character_placeholder: PanelContainer = $GameScreen/CharacterPlaceholder
+@onready var act_label: Label = $GameScreen/SceneHeader/Content/ActLabel
+@onready var scene_id_label: Label = $GameScreen/SceneHeader/Content/SceneName
+@onready var narration: Label = $GameScreen/SceneHeader/Content/Narration
+@onready var npc_name: Label = $GameScreen/DialogueMargin/DialogueBox/Content/NameRow/NpcName
+@onready var npc_dialogue: Label = $GameScreen/DialogueMargin/DialogueBox/Content/NpcDialogue
+@onready var npc_initial: Label = $GameScreen/CharacterPlaceholder/Content/Initial
+@onready var npc_emotion: Label = $GameScreen/DialogueMargin/DialogueBox/Content/NameRow/Emotion
+@onready var player_input: TextEdit = $GameScreen/DialogueMargin/DialogueBox/Content/PlayerInput
+@onready var send_button: Button = $GameScreen/DialogueMargin/DialogueBox/Content/SendButton
+@onready var feedback: Label = $GameScreen/DialogueMargin/DialogueBox/Content/Feedback
+@onready var dialogue_margin: MarginContainer = $GameScreen/DialogueMargin
+@onready var next_choices_button: Button = $GameScreen/DialogueMargin/DialogueBox/Content/NextChoicesButton
+@onready var choice_margin: MarginContainer = $GameScreen/ChoiceMargin
+@onready var choices: VBoxContainer = $GameScreen/ChoiceMargin/ChoiceBox/Content/Choices
 @onready var choice_buttons: Array[Button] = [
-	$Page/GameScreen/Choices/Choice0,
-	$Page/GameScreen/Choices/Choice1,
-	$Page/GameScreen/Choices/Choice2
+	$GameScreen/ChoiceMargin/ChoiceBox/Content/Choices/Choice0,
+	$GameScreen/ChoiceMargin/ChoiceBox/Content/Choices/Choice1,
+	$GameScreen/ChoiceMargin/ChoiceBox/Content/Choices/Choice2
 ]
 @onready var farming_screen: VBoxContainer = $Page/FarmingScreen
 @onready var farming_title: Label = $Page/FarmingScreen/Title
@@ -80,6 +87,7 @@ const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 var session_id := ""
 var current_act := 1
 var current_npc_id := ""
+var current_background_id := ""
 var request_kind := ""
 var choice_ids: Array[String] = []
 var removed_obstacles := 0
@@ -111,6 +119,7 @@ func _ready() -> void:
 	new_game_button.pressed.connect(_start_new_game)
 	continue_button.pressed.connect(_continue_game)
 	send_button.pressed.connect(_submit_dialogue)
+	next_choices_button.pressed.connect(_fetch_choices)
 	restart_button.pressed.connect(_start_new_game)
 	for index in choice_buttons.size():
 		choice_buttons[index].pressed.connect(_submit_choice.bind(index))
@@ -213,6 +222,7 @@ func _submit_dialogue() -> void:
 
 
 func _fetch_choices() -> void:
+	next_choices_button.disabled = true
 	_request_json("choices", HTTPClient.METHOD_GET, "/api/v1/sessions/%s/choices" % session_id)
 
 
@@ -325,12 +335,15 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 	current_act = int(payload.get("act", 1))
 	var scene: Dictionary = payload.get("scene", {})
 	current_npc_id = str(scene.get("npcId", ""))
+	current_background_id = str(scene.get("backgroundId", "unknown"))
 	act_label.text = "ACT %s · %s" % [current_act, payload.get("timeLabel", "")]
 	narration.text = scene.get("narration", "")
 	npc_name.text = scene.get("npcName", "")
 	npc_initial.text = npc_name.text.left(1) if not npc_name.text.is_empty() else "?"
-	npc_emotion.text = _translate_emotion(str(scene.get("npcEmotion", "neutral")))
-	scene_id_label.text = _translate_background(str(scene.get("backgroundId", "unknown")))
+	var opening_emotion := str(scene.get("npcEmotion", "neutral"))
+	npc_emotion.text = _translate_emotion(opening_emotion)
+	scene_id_label.text = _translate_background(current_background_id)
+	_update_scene_art(current_background_id, current_npc_id, opening_emotion)
 	npc_dialogue.text = payload.get("openingDialogue", "")
 	player_input.placeholder_text = "%s에게 답하세요. (최대 300자)" % npc_name.text
 	feedback.text = transition_feedback
@@ -338,6 +351,10 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 	player_input.show()
 	send_button.show()
 	choices.hide()
+	choice_margin.hide()
+	dialogue_margin.show()
+	next_choices_button.hide()
+	next_choices_button.disabled = false
 	title_screen.hide()
 	farming_screen.hide()
 	final_choice_screen.hide()
@@ -361,12 +378,16 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 
 func _show_dialogue(payload: Dictionary) -> void:
 	npc_dialogue.text = payload.get("dialogue", "")
-	npc_emotion.text = _translate_emotion(str(payload.get("emotion", "neutral")))
+	var response_emotion := str(payload.get("emotion", "neutral"))
+	npc_emotion.text = _translate_emotion(response_emotion)
+	_update_character_art(current_npc_id, response_emotion)
 	var fallback_note := "\n대화 생성에 실패해 준비된 대사를 사용했습니다." if payload.get("fallbackUsed", false) else ""
 	feedback.text = "%s\n%s%s" % [payload.get("feedback", ""), payload.get("careerFeedback", ""), fallback_note]
 	player_input.hide()
 	send_button.hide()
-	_fetch_choices()
+	next_choices_button.show()
+	if smoke_test:
+		_fetch_choices()
 
 
 func _show_choices(payload: Dictionary) -> void:
@@ -383,6 +404,8 @@ func _show_choices(payload: Dictionary) -> void:
 		var remaining := float(time_limit) if remaining_value == null else float(remaining_value)
 		_show_final_choices(server_choices, time_limit, str(payload.get("timeoutChoiceId", "")), remaining)
 		return
+	dialogue_margin.hide()
+	choice_margin.show()
 	for index in choice_buttons.size():
 		choice_buttons[index].disabled = false
 		choice_buttons[index].visible = index < server_choices.size()
@@ -690,6 +713,42 @@ func _translate_background(background_id: String) -> String:
 		"community_barley_field": "마력보리 공동밭",
 		"cracked_sky_castle_wall": "균열 아래 성벽"
 	}.get(background_id, background_id.replace("_", " "))
+
+
+func _update_scene_art(background_id: String, npc_id: String, emotion_id: String) -> void:
+	var background_path := "res://assets/backgrounds/%s.png" % background_id
+	if ResourceLoader.exists(background_path):
+		background_image.texture = load(background_path)
+		background_image.show()
+	else:
+		background_image.texture = null
+		background_image.hide()
+	background_fallback.color = _background_fallback_color(background_id)
+	_update_character_art(npc_id, emotion_id)
+
+
+func _update_character_art(npc_id: String, emotion_id: String) -> void:
+	var character_path := "res://assets/characters/%s/%s.png" % [npc_id, emotion_id]
+	var neutral_path := "res://assets/characters/%s/neutral.png" % npc_id
+	if not ResourceLoader.exists(character_path) and ResourceLoader.exists(neutral_path):
+		character_path = neutral_path
+	if ResourceLoader.exists(character_path):
+		character_image.texture = load(character_path)
+		character_image.show()
+		character_placeholder.hide()
+	else:
+		character_image.texture = null
+		character_image.hide()
+		character_placeholder.show()
+
+
+func _background_fallback_color(background_id: String) -> Color:
+	return {
+		"study_night": Color("152038"),
+		"north_beacon_ruins": Color("263544"),
+		"community_barley_field": Color("30452f"),
+		"cracked_sky_castle_wall": Color("462936")
+	}.get(background_id, Color("141b28"))
 
 
 func _show_error(message: String) -> void:

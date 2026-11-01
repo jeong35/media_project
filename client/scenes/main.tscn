@@ -78,108 +78,6 @@ layout_mode = 2
 text = "Mock 모드 · 로컬 서버 필요"
 horizontal_alignment = 1
 
-[node name="GameScreen" type="VBoxContainer" parent="Page"]
-visible = false
-layout_mode = 2
-theme_override_constants/separation = 14
-
-[node name="ActLabel" type="Label" parent="Page/GameScreen"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "ACT 1 · 멸망 3년 전"
-
-[node name="Narration" type="Label" parent="Page/GameScreen"]
-layout_mode = 2
-text = "내레이션"
-autowrap_mode = 2
-
-[node name="NpcStage" type="HBoxContainer" parent="Page/GameScreen"]
-custom_minimum_size = Vector2(0, 132)
-layout_mode = 2
-theme_override_constants/separation = 16
-
-[node name="Portrait" type="PanelContainer" parent="Page/GameScreen/NpcStage"]
-custom_minimum_size = Vector2(160, 132)
-layout_mode = 2
-
-[node name="Content" type="VBoxContainer" parent="Page/GameScreen/NpcStage/Portrait"]
-layout_mode = 2
-alignment = 1
-
-[node name="Initial" type="Label" parent="Page/GameScreen/NpcStage/Portrait/Content"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.84, 0.7, 0.4, 1)
-theme_override_font_sizes/font_size = 42
-text = "에"
-horizontal_alignment = 1
-
-[node name="Emotion" type="Label" parent="Page/GameScreen/NpcStage/Portrait/Content"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.68, 0.8, 1)
-theme_override_font_sizes/font_size = 13
-text = "침착함"
-horizontal_alignment = 1
-
-[node name="SceneId" type="Label" parent="Page/GameScreen/NpcStage/Portrait/Content"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.47, 0.57, 1)
-theme_override_font_sizes/font_size = 11
-text = "영주 집무실"
-horizontal_alignment = 1
-
-[node name="DialoguePanel" type="PanelContainer" parent="Page/GameScreen/NpcStage"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="Content" type="VBoxContainer" parent="Page/GameScreen/NpcStage/DialoguePanel"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="NpcName" type="Label" parent="Page/GameScreen/NpcStage/DialoguePanel/Content"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "에드윈"
-
-[node name="NpcDialogue" type="Label" parent="Page/GameScreen/NpcStage/DialoguePanel/Content"]
-custom_minimum_size = Vector2(0, 68)
-layout_mode = 2
-text = "대사"
-autowrap_mode = 2
-
-[node name="PlayerInput" type="TextEdit" parent="Page/GameScreen"]
-custom_minimum_size = Vector2(0, 76)
-layout_mode = 2
-placeholder_text = "에드윈에게 답하세요. (최대 300자)"
-wrap_mode = 1
-
-[node name="SendButton" type="Button" parent="Page/GameScreen"]
-custom_minimum_size = Vector2(0, 48)
-layout_mode = 2
-text = "대답하기"
-
-[node name="Feedback" type="Label" parent="Page/GameScreen"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.62, 0.78, 0.68, 1)
-text = ""
-autowrap_mode = 2
-
-[node name="Choices" type="VBoxContainer" parent="Page/GameScreen"]
-visible = false
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Choice0" type="Button" parent="Page/GameScreen/Choices"]
-custom_minimum_size = Vector2(0, 46)
-layout_mode = 2
-
-[node name="Choice1" type="Button" parent="Page/GameScreen/Choices"]
-custom_minimum_size = Vector2(0, 46)
-layout_mode = 2
-
-[node name="Choice2" type="Button" parent="Page/GameScreen/Choices"]
-custom_minimum_size = Vector2(0, 46)
-layout_mode = 2
-
 [node name="FarmingScreen" type="VBoxContainer" parent="Page"]
 visible = false
 layout_mode = 2
@@ -444,6 +342,226 @@ autowrap_mode = 2
 custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 text = "다시 시작"
+
+[node name="GameScreen" type="Control" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BackgroundFallback" type="ColorRect" parent="GameScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.105, 0.145, 1)
+
+[node name="BackgroundImage" type="TextureRect" parent="GameScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="BackgroundShade" type="ColorRect" parent="GameScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.015, 0.02, 0.035, 0.28)
+
+[node name="SceneHeader" type="MarginContainer" parent="GameScreen"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 0.58
+offset_bottom = 112.0
+theme_override_constants/margin_left = 38
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 38
+
+[node name="Content" type="VBoxContainer" parent="GameScreen/SceneHeader"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ActLabel" type="Label" parent="GameScreen/SceneHeader/Content"]
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 18
+text = "ACT 1 · 멸망 3년 전"
+
+[node name="SceneName" type="Label" parent="GameScreen/SceneHeader/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 13
+text = "밤의 영주 집무실"
+
+[node name="Narration" type="Label" parent="GameScreen/SceneHeader/Content"]
+layout_mode = 2
+text = "내레이션"
+autowrap_mode = 2
+
+[node name="CharacterImage" type="TextureRect" parent="GameScreen"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 0.48
+anchor_top = 0.08
+anchor_right = 0.96
+anchor_bottom = 0.73
+grow_horizontal = 0
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CharacterPlaceholder" type="PanelContainer" parent="GameScreen"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 0.61
+anchor_top = 0.17
+anchor_right = 0.91
+anchor_bottom = 0.69
+grow_horizontal = 0
+grow_vertical = 2
+modulate = Color(1, 1, 1, 0.78)
+
+[node name="Content" type="VBoxContainer" parent="GameScreen/CharacterPlaceholder"]
+layout_mode = 2
+alignment = 1
+
+[node name="Initial" type="Label" parent="GameScreen/CharacterPlaceholder/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.84, 0.7, 0.4, 1)
+theme_override_font_sizes/font_size = 72
+text = "에"
+horizontal_alignment = 1
+
+[node name="Guide" type="Label" parent="GameScreen/CharacterPlaceholder/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.56, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 13
+text = "NPC 이미지 영역"
+horizontal_alignment = 1
+
+[node name="DialogueMargin" type="MarginContainer" parent="GameScreen"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -218.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/margin_left = 38
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 38
+theme_override_constants/margin_bottom = 26
+
+[node name="DialogueBox" type="PanelContainer" parent="GameScreen/DialogueMargin"]
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="GameScreen/DialogueMargin/DialogueBox"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="NameRow" type="HBoxContainer" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="NpcName" type="Label" parent="GameScreen/DialogueMargin/DialogueBox/Content/NameRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.76, 0.4, 1)
+theme_override_font_sizes/font_size = 22
+text = "에드윈"
+
+[node name="Emotion" type="Label" parent="GameScreen/DialogueMargin/DialogueBox/Content/NameRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.68, 0.8, 1)
+text = "차분함"
+vertical_alignment = 2
+
+[node name="NpcDialogue" type="Label" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "대사"
+autowrap_mode = 2
+
+[node name="PlayerInput" type="TextEdit" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+custom_minimum_size = Vector2(0, 58)
+layout_mode = 2
+placeholder_text = "에드윈에게 답하세요. (최대 300자)"
+wrap_mode = 1
+
+[node name="SendButton" type="Button" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "대답하기"
+
+[node name="Feedback" type="Label" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.78, 0.68, 1)
+text = ""
+autowrap_mode = 2
+
+[node name="NextChoicesButton" type="Button" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+visible = false
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "선택지 보기"
+
+[node name="ChoiceMargin" type="MarginContainer" parent="GameScreen"]
+visible = false
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -226.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/margin_left = 72
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 72
+theme_override_constants/margin_bottom = 26
+
+[node name="ChoiceBox" type="PanelContainer" parent="GameScreen/ChoiceMargin"]
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="GameScreen/ChoiceMargin/ChoiceBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Prompt" type="Label" parent="GameScreen/ChoiceMargin/ChoiceBox/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.72, 0.5, 1)
+text = "어떻게 결정하시겠습니까?"
+horizontal_alignment = 1
+
+[node name="Choices" type="VBoxContainer" parent="GameScreen/ChoiceMargin/ChoiceBox/Content"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Choice0" type="Button" parent="GameScreen/ChoiceMargin/ChoiceBox/Content/Choices"]
+custom_minimum_size = Vector2(0, 39)
+layout_mode = 2
+
+[node name="Choice1" type="Button" parent="GameScreen/ChoiceMargin/ChoiceBox/Content/Choices"]
+custom_minimum_size = Vector2(0, 39)
+layout_mode = 2
+
+[node name="Choice2" type="Button" parent="GameScreen/ChoiceMargin/ChoiceBox/Content/Choices"]
+custom_minimum_size = Vector2(0, 39)
+layout_mode = 2
 
 [node name="HealthRequest" type="HTTPRequest" parent="."]
 timeout = 8.0
