@@ -382,12 +382,30 @@ func _show_dialogue(payload: Dictionary) -> void:
 	npc_emotion.text = _translate_emotion(response_emotion)
 	_update_character_art(current_npc_id, response_emotion)
 	var fallback_note := "\n대화 생성에 실패해 준비된 대사를 사용했습니다." if payload.get("fallbackUsed", false) else ""
+	var remaining := int(payload.get("dialogueRemaining", 0))
+	var choices_available := bool(payload.get("choicesAvailable", true))
 	feedback.text = "%s\n%s%s" % [payload.get("feedback", ""), payload.get("careerFeedback", ""), fallback_note]
-	player_input.hide()
-	send_button.hide()
-	next_choices_button.show()
-	if smoke_test:
-		_fetch_choices()
+	if choices_available:
+		player_input.hide()
+		send_button.hide()
+		next_choices_button.show()
+		if smoke_test:
+			_fetch_choices()
+	else:
+		player_input.text = ""
+		player_input.placeholder_text = "%s에게 한 번 더 말하거나 질문하세요. (남은 대화 %d회)" % [npc_name.text, remaining]
+		player_input.show()
+		player_input.editable = true
+		send_button.show()
+		send_button.disabled = false
+		next_choices_button.hide()
+		if smoke_test:
+			match current_act:
+				1: player_input.text = "그럼 비용과 위험도를 비교해서 가장 급한 일부터 정하자."
+				2: player_input.text = "확실한 사실과 가설을 나눠서 다시 설명해줘."
+				3: player_input.text = "주민들이 당장 가장 부족한 게 뭔지 알려줘."
+				_: player_input.text = "지금까지 준비한 것 중 가장 확실한 것부터 확인하자."
+			_submit_dialogue()
 
 
 func _show_choices(payload: Dictionary) -> void:
