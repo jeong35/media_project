@@ -1,21 +1,24 @@
 {
   "act": 4,
-  "timeLabel": "균열 발생 당일",
+  "timeLabel": "균열 발생 7일 전 → 발생 당일",
   "scene": {
     "backgroundId": "cracked_sky_castle_wall",
     "npcId": "steward_edwin",
     "npcName": "에드윈",
     "npcEmotion": "urgent",
-    "narration": "붉게 갈라진 하늘 아래 세 결계탑의 결계핵이 불안정하게 떨렸다. 성벽 너머로 마력 폭풍이 다가오고, 성문 앞에는 명령을 기다리는 병사와 주민이 뒤섞였다.",
-    "openingDialogue": "영주님, 균열이 예상보다 빠르게 무너지고 있습니다. 지금 내리는 명령이 영지의 마지막 기록이 될 수도 있습니다."
+    "narration": "리아의 재계산 결과, 멸망은 3년 뒤가 아니라 불과 7일 앞으로 당겨졌다. 에드윈, 리아, 마르타가 한자리에 모여 병력·결계·보급·대피 현황을 쏟아낸다. 7일 뒤 붉게 갈라진 하늘 아래, 그 회의에서 정리한 마지막 계획이 시험대에 오른다.",
+    "openingDialogue": "영주님, 리아는 결계가 버틸 시간을 계산했고 마르타는 주민 대피와 비축량을 정리했습니다. 저는 병력과 자금을 확인했습니다. 전부 완벽하게 지킬 수는 없습니다. 마지막으로 무엇을 확인하고 어떤 기준으로 명령을 내리시겠습니까?"
   },
   "mockDialogue": {
-    "dialogue": "지금까지 준비한 군사와 봉인, 자금과 주민의 신뢰를 모두 확인했습니다. 결정을 내리시면 즉시 움직이겠습니다.",
+    "dialogue": "알겠습니다. 완벽한 계획이 아니라 지금까지 준비한 것을 가장 효과적으로 쓰는 계획으로 정리하겠습니다. 리아와 마르타에게도 같은 기준을 공유하겠습니다.",
     "emotion": "resolved",
-    "feedback": "에드윈은 네 갈래의 최종 대응안을 펼쳐 보였다.",
-    "acceptedTags": ["observant", "pragmatic"],
-    "careerFeedback": "위기 앞에서 누적된 준비를 하나의 명령으로 결집할 순간이다.",
-    "summary": "균열 발생 당일, 영주는 에드윈과 마지막 대응 명령을 검토했다."
+    "feedback": "에드윈은 처음으로 주인공의 판단을 시험하는 대신, 그 판단을 실행하기 위해 기다렸다.",
+    "acceptedTags": [
+      "observant",
+      "pragmatic"
+    ],
+    "careerFeedback": "서로 다른 전문가와 주민의 우선순위를 하나의 최종 명령으로 묶는 지도력이 드러났다.",
+    "summary": "균열 발생 직전 비상 회의에서 영주는 군사·마법·보급·대피 현황을 확인하고 마지막 판단 기준을 정했다."
   },
   "choices": [
     {
@@ -24,34 +27,56 @@
       "resultNarration": "영주는 기사단의 선두에서 성벽을 지켰다.",
       "feedback": "훈련과 장비에 투자한 시간이 마지막 방어선의 힘이 됐다.",
       "changes": {},
-      "affinityChanges": { "martial": 8, "leadership": 4 },
-      "flags": ["final_direct_defense"],
+      "affinityChanges": {
+        "martial": 8,
+        "leadership": 4
+      },
+      "flags": [
+        "final_direct_defense"
+      ],
       "finalOutcome": {
-        "requirements": { "military": 35 },
+        "requirements": {
+          "military": 35
+        },
         "territoryFateId": "self_saved",
         "occupationName": "균열 수비대장",
         "title": "무너지지 않은 성벽의 선봉",
         "territoryOutcome": "스스로 균열의 파편을 막아 살아남은 영지",
-        "traits": ["용기", "지도력", "실행력"],
+        "traits": [
+          "용기",
+          "지도력",
+          "실행력"
+        ],
         "shareLine": "그는 예언된 멸망 앞에서 물러서지 않고 영지의 방패가 되었다.",
         "careerAffinityId": "martial"
       }
     },
     {
       "choiceId": "final_ward",
-      "label": "B. 세 결계핵을 연결해 대결계 마법진을 완성한다.",
+      "label": "B. 세 결계핵을 연결해 대결계 마법진을 안정화한다.",
       "resultNarration": "세 결계탑에서 뻗은 빛이 대결계 마법진을 이루며 붉은 균열을 감쌌다.",
-      "feedback": "리아와 축적한 봉인 연구가 하늘을 붙잡았다.",
+      "feedback": "리아와 축적한 봉인 연구가 핵심이 됐다. 농사에서 비상 마력 저장분까지 준비했다면 결계가 조금 더 안정적으로 버틸 수 있다.",
       "changes": {},
-      "affinityChanges": { "arcane": 8, "leadership": 4 },
-      "flags": ["final_ward_ritual"],
+      "affinityChanges": {
+        "arcane": 8,
+        "leadership": 4
+      },
+      "flags": [
+        "final_ward_ritual"
+      ],
       "finalOutcome": {
-        "requirements": { "ward": 35 },
+        "requirements": {
+          "ward": 35
+        },
         "territoryFateId": "self_saved",
         "occupationName": "북부 결계술사",
         "title": "대결계 마법진을 완성한 자",
         "territoryOutcome": "봉인식을 완성해 스스로 균열을 닫은 영지",
-        "traits": ["통찰", "마법", "집중력"],
+        "traits": [
+          "통찰",
+          "마법",
+          "집중력"
+        ],
         "shareLine": "그는 꺼져 가던 세 빛을 이어 멸망의 하늘을 봉합했다.",
         "careerAffinityId": "arcane"
       }
@@ -62,15 +87,27 @@
       "resultNarration": "영주의 인장이 찍힌 긴급 서신이 인접 영지로 날아갔다.",
       "feedback": "쌓아 둔 자원과 평판이 국경을 넘어 지원군을 움직였다.",
       "changes": {},
-      "affinityChanges": { "diplomacy": 8, "commerce": 4 },
-      "flags": ["final_external_aid"],
+      "affinityChanges": {
+        "diplomacy": 8,
+        "commerce": 4
+      },
+      "flags": [
+        "final_external_aid"
+      ],
       "finalOutcome": {
-        "requirements": { "treasury": 30, "legitimacy": 35 },
+        "requirements": {
+          "treasury": 30,
+          "legitimacy": 35
+        },
         "territoryFateId": "external_aid",
         "occupationName": "북부 연합 조정관",
         "title": "고립된 영지에 길을 연 협상가",
         "territoryOutcome": "외부 지원군과 함께 균열의 충격을 견딘 영지",
-        "traits": ["외교", "신뢰", "협상력"],
+        "traits": [
+          "외교",
+          "신뢰",
+          "협상력"
+        ],
         "shareLine": "그는 혼자 버티는 대신 신뢰로 북부 전체를 움직였다.",
         "careerAffinityId": "diplomacy"
       }
@@ -81,15 +118,24 @@
       "resultNarration": "대결계보다 먼저 대피 종이 울리고 주민 행렬이 남쪽 길로 향했다.",
       "feedback": "성벽과 들판은 남겨 두었지만 사람들은 다음 계절을 맞을 수 있게 됐다.",
       "changes": {},
-      "affinityChanges": { "leadership": 8, "diplomacy": 3 },
-      "flags": ["final_evacuate"],
+      "affinityChanges": {
+        "leadership": 8,
+        "diplomacy": 3
+      },
+      "flags": [
+        "final_evacuate"
+      ],
       "finalOutcome": {
         "requirements": {},
         "territoryFateId": "people_evacuated",
         "occupationName": "피난민의 길잡이",
         "title": "영지보다 사람을 먼저 살린 영주",
         "territoryOutcome": "땅은 잃었지만 주민 대부분이 살아남은 영지",
-        "traits": ["다정함", "결단력", "책임감"],
+        "traits": [
+          "다정함",
+          "결단력",
+          "책임감"
+        ],
         "shareLine": "그는 성을 버렸지만 영지의 진짜 이름인 사람들을 지켜 냈다.",
         "careerAffinityId": "leadership"
       }
@@ -107,7 +153,11 @@
       "occupationName": "폐허의 재건관",
       "title": "무너진 영지에서 다시 시작한 자",
       "territoryOutcome": "큰 피해를 입었지만 주민의 결속으로 생존한 영지",
-      "traits": ["인내", "책임감", "재건"],
+      "traits": [
+        "인내",
+        "책임감",
+        "재건"
+      ],
       "shareLine": "완벽히 막지는 못했지만 그는 살아남은 사람들과 폐허에 첫 돌을 놓았다."
     },
     "destroyed": {
@@ -116,7 +166,11 @@
       "occupationName": "멸망 기록관",
       "title": "마지막 순간까지 선택을 기록한 자",
       "territoryOutcome": "준비가 힘을 발휘하지 못해 균열에 무너진 영지",
-      "traits": ["회한", "기록", "생존"],
+      "traits": [
+        "회한",
+        "기록",
+        "생존"
+      ],
       "shareLine": "그의 선택은 영지를 구하지 못했지만 다음 멸망을 막을 기록으로 남았다."
     },
     "careerRules": {
@@ -141,9 +195,14 @@
           "achievementId": "arcane_field_engineer",
           "displayName": "봉인술을 밭으로 가져온 장인",
           "priority": 200,
-          "territoryFateIds": ["self_saved"],
+          "territoryFateIds": [
+            "self_saved"
+          ],
           "finalChoiceId": "final_ward",
-          "minimumAffinityScores": { "arcane": 20, "craft": 15 },
+          "minimumAffinityScores": {
+            "arcane": 20,
+            "craft": 15
+          },
           "endingTone": "b_grade",
           "occupationName": "균열 봉합 농기구 명장",
           "evidence": "봉인술과 개량 농기구를 함께 발전시켜 하늘과 밭의 균열을 모두 다뤘다."
@@ -152,9 +211,14 @@
           "achievementId": "tool_diplomat",
           "displayName": "개량 농기구로 연 협상",
           "priority": 100,
-          "territoryFateIds": ["external_aid"],
+          "territoryFateIds": [
+            "external_aid"
+          ],
           "finalChoiceId": "final_external_aid",
-          "minimumAffinityScores": { "diplomacy": 20, "craft": 13 },
+          "minimumAffinityScores": {
+            "diplomacy": 20,
+            "craft": 13
+          },
           "endingTone": "unexpected",
           "occupationName": "왕국 공인 농기구 외교관",
           "evidence": "개량 농기구의 생산성을 협상 근거로 삼아 외부 지원을 끌어냈다."
@@ -223,5 +287,6 @@
         }
       }
     }
-  }
+  },
+  "dialogueLimit": 1
 }
