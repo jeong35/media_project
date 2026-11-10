@@ -11,7 +11,8 @@ public sealed record MockGameContent(InitialStateContent InitialState, IReadOnly
 
 public sealed record MockActContent(int Act, string TimeLabel, InitialStateContent? InitialState, SceneContent Scene,
     MockDialogueContent MockDialogue, IReadOnlyList<ChoiceContent> Choices, string? Activity, FarmingContent? Farming, EndingContent? Ending,
-    int? ChoiceTimeLimitSeconds = null, string? TimeoutChoiceId = null, FinaleRulesContent? FinaleRules = null);
+    int? ChoiceTimeLimitSeconds = null, string? TimeoutChoiceId = null, FinaleRulesContent? FinaleRules = null,
+    int DialogueLimit = 1);
 public sealed record InitialStateContent(int Military, int Treasury, int Legitimacy, int Ward);
 public sealed record SceneContent(string BackgroundId, string NpcId, string NpcName, string NpcEmotion, string Narration, string OpeningDialogue);
 public sealed record MockDialogueContent(string Dialogue, string Emotion, string Feedback, IReadOnlyList<string> AcceptedTags, string CareerFeedback, string Summary);
