@@ -42,7 +42,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         await database.SaveChangesAsync();
 
         return new SessionStartResponse(session.Id, 1, act.TimeLabel,
-            ToSceneResponse(act.Scene), act.Scene.OpeningDialogue, 1);
+            ToSceneResponse(act.Scene), act.Scene.OpeningDialogue, act.DialogueLimit);
     }
 
     public async Task<SessionSnapshotResponse> GetSessionAsync(Guid sessionId)
@@ -76,8 +76,11 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var generated = await dialogueGeneration.GenerateAsync(GetProviderId(session.Mode), act, request.Text,
             GetFailureScenario(session.Mode), TraitIds);
         var dialogue = generated.Content;
+        session.CurrentTurn += 1;
+        var dialogueRemaining = Math.Max(0, act.DialogueLimit - session.CurrentTurn);
+        var choicesAvailable = dialogueRemaining == 0;
         var response = new DialogueResponse(dialogue.Dialogue, dialogue.Emotion, dialogue.Feedback,
-            dialogue.AcceptedTags, dialogue.CareerFeedback, 0, true, generated.ResponseSource,
+            dialogue.AcceptedTags, dialogue.CareerFeedback, dialogueRemaining, choicesAvailable, generated.ResponseSource,
             generated.FallbackUsed, generated.AttemptCount);
         var npc = await database.NpcStates.SingleAsync(state => state.SessionId == sessionId && state.NpcId == act.Scene.NpcId);
         npc.Trust = Math.Clamp(npc.Trust + 2, 0, 100);
@@ -87,8 +90,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             var trait = await database.TraitScores.SingleAsync(score => score.SessionId == sessionId && score.TraitId == tag);
             trait.Score = Math.Clamp(trait.Score + 1, 0, 10);
         }
-        session.CurrentTurn += 1;
-        session.Phase = "AwaitingChoice";
+        session.Phase = choicesAvailable ? "AwaitingChoice" : "AwaitingDialogue";
         session.UpdatedAt = DateTimeOffset.UtcNow;
         database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "DialogueGenerated", session.CurrentAct, response, request.IdempotencyKey));
         await database.SaveChangesAsync();
@@ -171,7 +173,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             session.Phase = "AwaitingDialogue";
             if (!await database.NpcStates.AnyAsync(state => state.SessionId == sessionId && state.NpcId == nextContent.Scene.NpcId))
                 database.NpcStates.Add(new NpcState { SessionId = sessionId, NpcId = nextContent.Scene.NpcId, Trust = 20 });
-            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, 1);
+            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, nextContent.DialogueLimit);
         }
 
         var response = new ChoiceResultResponse(choice.ResultNarration, choice.Feedback, choice.Changes, ToStateResponse(session), nextAct, nextActivity, ending);
@@ -226,7 +228,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             session.Phase = "AwaitingDialogue";
             if (!await database.NpcStates.AnyAsync(state => state.SessionId == sessionId && state.NpcId == nextContent.Scene.NpcId))
                 database.NpcStates.Add(new NpcState { SessionId = sessionId, NpcId = nextContent.Scene.NpcId, Trust = 20 });
-            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, 1);
+            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, nextContent.DialogueLimit);
         }
         var response = new FarmingResultResponse(score, string.Join(" ", feedbackParts), changes, ToStateResponse(session), nextAct, ending);
 
