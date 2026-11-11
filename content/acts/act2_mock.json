@@ -58,9 +58,9 @@
     },
     {
       "choiceId": "seek_allies",
-      "label": "C. 왕국과 상단에 외부 지원을 요청한다.",
-      "resultNarration": "왕도와 북부 상단으로 영지의 인장이 찍힌 지원 요청서가 출발했다.",
-      "feedback": "협상 비용이 들었지만 영지 밖의 지원 가능성과 주민의 기대가 커졌다.",
+      "label": "C. 상단과 교역을 다시 열어 영지의 경제와 신용을 재건한다.",
+      "resultNarration": "북부 상단과 끊겼던 거래가 다시 이어지고, 영지는 멸망 대비를 지속할 자금과 외부 연락망을 쌓기 시작했다.",
+      "feedback": "당장 지원군을 부르는 대신 교역과 신용을 회복해 장기적으로 외부와 협력할 기반을 만들었다.",
       "changes": {
         "treasury": -5,
         "legitimacy": 10
@@ -74,5 +74,8 @@
       ]
     }
   ],
-  "dialogueLimit": 2
+  "dialogueMinTurns": 2,
+  "dialogueMaxTurns": 5,
+  "decisionBridgeDialogue": "지금까지 이야기한 내용을 기준으로 보면, 단기 처치보다 앞으로 남은 시간을 어떤 방향에 투자할지 정해야 해요. 세 가지 장기 전략으로 정리해 볼게요.",
+  "decisionBridgeEmotion": "determined"
 }
