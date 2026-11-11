@@ -317,3 +317,77 @@ Godot 실행:
 ```bash
 dotnet run --project tests/Game.Rules.Tests/Game.Rules.Tests.csproj
 ```
+
+
+---
+
+## 2026-11-11 — 자유 대화 확장과 스토리 v2 정리
+
+### 목표
+
+- NPC 대화를 질문 2회 후 선택지로 넘어가는 구조에서, 실제 AI 채팅처럼 여러 턴 이어갈 수 있는 구조로 확장.
+- 자유 대화가 끝난 뒤 고정 스토리로 갑자기 끊기지 않도록, 현재까지의 대화 맥락을 받아 고정 선택지로 이어주는 전환 대사를 생성.
+- 주인공 동기를 짧은 기간의 애착보다 생존과 책임의 누적으로 정리.
+- 1인 제작 기준으로 배경/CG 제작량을 줄이는 연출 원칙 반영.
+
+### 구현 범위
+
+- Act 1~3 자유 대화: 최소 2턴 이후 `결정하기` 활성화, 최대 5턴.
+- Act 4 비상 회의: 최소 1턴, 최대 3턴.
+- `POST /api/v1/sessions/{sessionId}/decision-bridge` 추가.
+- NPC의 `ConversationSummary`를 누적 맥락으로 다음 OpenAI 요청에 전달.
+- `결정하기` 호출 시 공개 NPC 페르소나, 누적 요약, 현재 장면, 다음 고정 선택지 목록을 제공해 1~3문장 전환 대사 생성.
+- 전환 대사는 선택지/능력치/성공 여부/다음 Act를 변경할 수 없도록 프롬프트 경계 설정.
+- 클라이언트 기존 `NextChoicesButton`을 재사용해 `결정하기 → 전환 대사 → 선택지 보기` 흐름 구현.
+- 최대 대화 횟수에 도달하면 입력을 닫고 결정 단계만 허용.
+- Act 2 세 번째 장기 전략을 즉시 외부 지원 요청에서 경제·교역·신용 재건으로 수정.
+- Act 4의 시간축을 “3년 뒤가 아니라 7일 뒤”가 아니라, Act 3 시점 기준 예상보다 악화가 빨라져 7일 뒤로 재계산되는 설정으로 수정.
+- 주인공은 원래 몸의 기억이 전혀 없는 설정으로 통일.
+- 주인공 행동 동기는 주민들과 빠르게 정이 들었다는 설명 대신 `생존 → 개입 → 책임`으로 정리.
+- 별도 CG보다 `배경 1장 + NPC 스프라이트 + 텍스트/효과음`을 우선하는 연출 원칙 추가.
+- 제작용 보조 문서 `docs/story_script_draft.md` 추가.
+
+### 핵심 판단
+
+1. AI는 자유 대화와 전환 문장을 생성하지만 선택지와 게임 결과는 변경하지 않는다.
+2. 추천 질문 버튼은 사용자의 대화 방향을 과도하게 유도할 수 있어 넣지 않고, 입력 placeholder에 가벼운 예시만 제공한다.
+3. 전환 대사를 별도 API로 분리해 자유 채팅과 결정론적 스토리의 경계를 명확하게 유지한다.
+4. 대화 전체 로그를 새 테이블로 늘리기보다 기존 NPC 상태의 누적 요약을 전달해 현재 MVP 복잡도를 낮춘다.
+5. 동일 장면 재사용과 텍스트 연출을 적극 활용해 1인 제작 리소스를 보호한다.
+
+### 변경 파일
+
+- `server/Game.Api/Services/MockContent.cs`
+- `server/Game.Api/Contracts/GameContracts.cs`
+- `server/Game.Api/Services/DialogueGenerationService.cs`
+- `server/Game.Api/Services/OpenAiDialogueProvider.cs`
+- `server/Game.Api/Services/MockGameService.cs`
+- `server/Game.Api/Program.cs`
+- `client/scripts/main.gd`
+- `client/scenes/main.tscn`
+- `content/acts/act1_mock.json` ~ `act4_mock.json`
+- `data/protagonist.json`
+- `tests/Game.Rules.Tests/Program.cs`
+- `docs/게임개발명세서.md`
+- `docs/story_script_draft.md`
+- `README.md`
+
+### 검증
+
+- 서버·클라이언트·테스트·Act JSON에서 기존 `dialogueLimit` 참조가 남지 않은 것을 정적으로 확인.
+- 모든 Act JSON에 `dialogueMinTurns`, `dialogueMaxTurns`, `decisionBridgeDialogue`가 존재하는 것을 확인.
+- 서버, 클라이언트, 테스트에서 decision bridge 참조가 연결된 것을 정적으로 확인.
+- 테스트 시나리오를 `대화 → decision bridge → 고정 선택` 순서로 수정.
+- 최소 대화 수 이전 decision bridge 호출을 거부하고, 이후 허용하는 테스트 케이스 추가.
+
+### 현재 한계
+
+- 현재 ChatGPT 작업 환경에서는 저장소 전체를 로컬로 체크아웃해 `dotnet build`와 Godot 실행 테스트를 직접 수행하지 못했다.
+- 따라서 이번 변경은 GitHub 파일 단위 정적 검증까지 완료했으며, 실제 컴파일/실행 검증은 로컬 개발 환경에서 추가로 필요하다.
+- 현재는 전체 원문 대화 로그 대신 누적 요약을 컨텍스트로 사용한다. 대화 재현성과 디버깅 필요성이 커지면 최근 N턴 원문 저장을 별도 확장할 수 있다.
+
+### 다음 작업
+
+- 로컬에서 서버 빌드 및 규칙 테스트 실행.
+- Godot에서 `2턴 대화 → 결정하기 → 전환 대사 → 선택지` 플로우 확인.
+- Live OpenAI 모드에서 누적 요약이 실제 티키타카에 충분한지 품질 확인.
