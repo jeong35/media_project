@@ -62,6 +62,11 @@ layout_mode = 2
 text = "3년 뒤 멸망할 북부 영지에서, 첫 번째 결정을 내리세요."
 horizontal_alignment = 1
 
+[node name="LiveModeToggle" type="CheckButton" parent="Page/TitleScreen"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "Live API 사용 (실제 호출 비용 발생)"
+
 [node name="NewGameButton" type="Button" parent="Page/TitleScreen"]
 custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
@@ -564,7 +569,7 @@ custom_minimum_size = Vector2(0, 39)
 layout_mode = 2
 
 [node name="HealthRequest" type="HTTPRequest" parent="."]
-timeout = 8.0
+timeout = 40.0
 
 [node name="CheckpointRequest" type="HTTPRequest" parent="."]
 timeout = 8.0

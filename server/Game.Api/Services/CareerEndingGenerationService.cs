@@ -38,7 +38,7 @@ public sealed class MockCareerEndingProvider : ICareerEndingProvider
         Task.FromResult(JsonSerializer.Serialize(CareerEndingGenerationService.BuildMockCandidates(request.Facts), JsonOptions));
 }
 
-public sealed class CareerEndingGenerationService(IEnumerable<ICareerEndingProvider> providers)
+public sealed class CareerEndingGenerationService(IEnumerable<ICareerEndingProvider> providers, LiveApiMetrics liveApiMetrics)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IReadOnlyDictionary<string, ICareerEndingProvider> providersById = providers
@@ -49,6 +49,8 @@ public sealed class CareerEndingGenerationService(IEnumerable<ICareerEndingProvi
     {
         if (!providersById.TryGetValue(providerId, out var provider)) return FixedFallback(facts, 0);
 
+        var isLiveProvider = provider is OpenAiCareerEndingProvider;
+        if (isLiveProvider) liveApiMetrics.RecordProviderRequest(LiveApiOperation.CareerEnding);
         var maximumAttempts = Math.Clamp(provider.MaximumAttempts, 1, 3);
         for (var attempt = 1; attempt <= maximumAttempts; attempt++)
         {
@@ -68,7 +70,7 @@ public sealed class CareerEndingGenerationService(IEnumerable<ICareerEndingProvi
             }
             catch (CareerEndingProviderException error) when (!error.Retryable)
             {
-                return FixedFallback(facts, attempt);
+                return FixedFallbackWithMetrics(facts, attempt, isLiveProvider, liveApiMetrics);
             }
             catch (Exception error) when (error is HttpRequestException or TimeoutException or JsonException or InvalidDataException)
             {
@@ -78,12 +80,20 @@ public sealed class CareerEndingGenerationService(IEnumerable<ICareerEndingProvi
             {
                 if (attempt >= maximumAttempts) continue;
                 var delay = error.RetryAfter ?? TimeSpan.FromMilliseconds(100 * attempt);
-                if (delay > TimeSpan.FromSeconds(5)) return FixedFallback(facts, attempt);
+                if (delay > TimeSpan.FromSeconds(5))
+                    return FixedFallbackWithMetrics(facts, attempt, isLiveProvider, liveApiMetrics);
                 if (delay > TimeSpan.Zero) await Task.Delay(delay, cancellationToken);
             }
         }
 
-        return FixedFallback(facts, maximumAttempts);
+        return FixedFallbackWithMetrics(facts, maximumAttempts, isLiveProvider, liveApiMetrics);
+    }
+
+    private static CareerEndingGenerationResult FixedFallbackWithMetrics(CareerEndingFacts facts, int attemptCount,
+        bool isLiveProvider, LiveApiMetrics metrics)
+    {
+        if (isLiveProvider) metrics.RecordFallback(LiveApiOperation.CareerEnding);
+        return FixedFallback(facts, attemptCount);
     }
 
     public static GeneratedCareerEnding BuildFixedContent(CareerEndingFacts facts)
