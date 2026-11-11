@@ -40,6 +40,11 @@ public sealed class MockDialogueProvider : IDialogueProvider
         if (request.FailureScenario == "invalid_payload")
             return Task.FromResult("{ invalid dialogue payload");
 
+        if (request.DecisionBridge)
+            return Task.FromResult(JsonSerializer.Serialize(new GeneratedDialogue(request.Act.DecisionBridgeDialogue,
+                request.Act.DecisionBridgeEmotion, "대화를 바탕으로 결정 단계로 넘어갑니다.", [], "",
+                "결정 단계로 전환했다."), JsonOptions));
+
         var dialogue = request.Act.MockDialogue;
         return Task.FromResult(JsonSerializer.Serialize(new GeneratedDialogue(dialogue.Dialogue, dialogue.Emotion,
             dialogue.Feedback, dialogue.AcceptedTags, dialogue.CareerFeedback, dialogue.Summary), JsonOptions));
