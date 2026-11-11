@@ -3,11 +3,15 @@ namespace Game.Api.Contracts;
 public sealed record HealthResponse(string Status, string Service, string Version, bool DatabaseReady);
 public sealed record SessionStartRequest(string Mode = "mock", string FailureScenario = "none");
 public sealed record SceneResponse(string BackgroundId, string NpcId, string NpcName, string NpcEmotion, string Narration);
-public sealed record SessionStartResponse(Guid SessionId, int Act, string TimeLabel, SceneResponse Scene, string OpeningDialogue, int DialogueRemaining);
+public sealed record SessionStartResponse(Guid SessionId, int Act, string TimeLabel, SceneResponse Scene, string OpeningDialogue,
+    int DialogueRemaining, bool ChoicesAvailable = false);
 public sealed record DialogueRequest(string NpcId, string Text, string IdempotencyKey);
 public sealed record DialogueResponse(string Dialogue, string Emotion, string Feedback, IReadOnlyList<string> AcceptedTags,
     string CareerFeedback, int DialogueRemaining, bool ChoicesAvailable, string ResponseSource = "mock",
     bool FallbackUsed = false, int AttemptCount = 1);
+public sealed record DecisionBridgeRequest(string IdempotencyKey);
+public sealed record DecisionBridgeResponse(string Dialogue, string Emotion, bool ChoicesAvailable = true,
+    string ResponseSource = "mock", bool FallbackUsed = false, int AttemptCount = 1);
 public sealed record ChoiceOptionResponse(string ChoiceId, string Label);
 public sealed record ChoicesResponse(IReadOnlyList<ChoiceOptionResponse> Choices, int? TimeLimitSeconds = null,
     string? TimeoutChoiceId = null, double? RemainingSeconds = null);
@@ -20,7 +24,8 @@ public sealed record EndingResponse(string OccupationName, string Title, string 
     IReadOnlyList<string>? CareerEvidence = null, string Epilogue = "", string GenerationSource = "fixed_template",
     bool GenerationFallbackUsed = false, int GenerationAttemptCount = 1, int GenerationCandidateCount = 1,
     int SelectedCandidateIndex = 0, int SelectionScore = 0);
-public sealed record NextActResponse(int Act, string TimeLabel, SceneResponse Scene, string OpeningDialogue, int DialogueRemaining);
+public sealed record NextActResponse(int Act, string TimeLabel, SceneResponse Scene, string OpeningDialogue,
+    int DialogueRemaining, bool ChoicesAvailable = false);
 public sealed record NextActivityResponse(string ActivityId, string Title, string Instructions);
 public sealed record ChoiceResultResponse(string ResultNarration, string Feedback, IReadOnlyDictionary<string, int> AppliedChanges,
     GameStateResponse State, NextActResponse? NextAct, NextActivityResponse? NextActivity, EndingResponse? Ending);
@@ -34,6 +39,6 @@ public sealed record FarmingResultResponse(int Score, string Feedback, IReadOnly
 public sealed record SessionSnapshotResponse(Guid SessionId, string Status, int Act, int Turn, string Phase,
     GameStateResponse State, EndingResponse? Ending, string TimeLabel, SceneResponse Scene,
     string OpeningDialogue, string CurrentDialogue, NextActivityResponse? NextActivity,
-    FarmingProgressResponse? FarmingProgress = null);
+    FarmingProgressResponse? FarmingProgress = null, int DialogueRemaining = 0, bool ChoicesAvailable = false);
 public sealed record ErrorResponse(string Code, string Message, bool Retryable, string RequestId);
 public sealed record ErrorEnvelope(ErrorResponse Error);
