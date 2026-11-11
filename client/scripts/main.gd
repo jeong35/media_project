@@ -368,22 +368,24 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 	player_input.placeholder_text = _dialogue_placeholder(current_act, npc_name.text)
 	feedback.text = transition_feedback
 	player_input.text = ""
-	player_input.show()
-	send_button.show()
+	var dialogue_remaining := int(payload.get("dialogueRemaining", 5))
+	var choices_available := bool(payload.get("choicesAvailable", false))
+	player_input.visible = dialogue_remaining > 0
+	player_input.editable = dialogue_remaining > 0
+	send_button.visible = dialogue_remaining > 0
+	send_button.disabled = dialogue_remaining <= 0
 	choices.hide()
 	choice_margin.hide()
 	dialogue_margin.show()
 	decision_bridge_generated = false
 	next_choices_button.text = "결정하기"
-	next_choices_button.hide()
+	next_choices_button.visible = choices_available
 	next_choices_button.disabled = false
 	title_screen.hide()
 	farming_screen.hide()
 	final_choice_screen.hide()
 	ending_screen.hide()
 	game_screen.show()
-	player_input.editable = true
-	send_button.disabled = false
 	new_game_button.disabled = false
 	continue_button.disabled = false
 	if smoke_save_dialogue_test:
