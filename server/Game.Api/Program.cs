@@ -53,6 +53,8 @@ app.MapGet("/api/v1/sessions/{sessionId:guid}", async (Guid sessionId, MockGameS
     Results.Ok(await game.GetSessionAsync(sessionId)));
 app.MapPost("/api/v1/sessions/{sessionId:guid}/dialogues", async (Guid sessionId, DialogueRequest request, MockGameService game) =>
     Results.Ok(await game.SubmitDialogueAsync(sessionId, request)));
+app.MapPost("/api/v1/sessions/{sessionId:guid}/decision-bridge", async (Guid sessionId, DecisionBridgeRequest request, MockGameService game) =>
+    Results.Ok(await game.SubmitDecisionBridgeAsync(sessionId, request)));
 app.MapGet("/api/v1/sessions/{sessionId:guid}/choices", async (Guid sessionId, MockGameService game) =>
     Results.Ok(await game.GetChoicesAsync(sessionId)));
 app.MapPost("/api/v1/sessions/{sessionId:guid}/choices", async (Guid sessionId, ChoiceRequest request, MockGameService game) =>
