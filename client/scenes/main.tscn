@@ -517,7 +517,7 @@ autowrap_mode = 2
 visible = false
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
-text = "선택지 보기"
+text = "결정하기"
 
 [node name="ChoiceMargin" type="MarginContainer" parent="GameScreen"]
 visible = false
