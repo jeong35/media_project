@@ -422,7 +422,7 @@ func _show_dialogue(payload: Dictionary) -> void:
 	if remaining <= 0:
 		feedback.text += "\n이 장면에서 나눌 수 있는 자유 대화를 모두 사용했습니다. 결정하기를 눌러 주세요."
 	if smoke_test:
-		if choices_available:
+		if remaining <= 0:
 			_request_decision_bridge()
 		else:
 			match current_act:
