@@ -42,7 +42,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         await database.SaveChangesAsync();
 
         return new SessionStartResponse(session.Id, 1, act.TimeLabel,
-            ToSceneResponse(act.Scene), act.Scene.OpeningDialogue, act.DialogueLimit);
+            ToSceneResponse(act.Scene), act.Scene.OpeningDialogue, act.DialogueMaxTurns, false);
     }
 
     public async Task<SessionSnapshotResponse> GetSessionAsync(Guid sessionId)
@@ -56,9 +56,12 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var farmingProgress = session.Phase == "AwaitingFarming"
             ? await GetLatestFarmingProgressAsync(sessionId)
             : null;
+        var currentDialogue = await GetLatestDialogueTextAsync(sessionId) ?? act.Scene.OpeningDialogue;
+        var dialogueRemaining = Math.Max(0, act.DialogueMaxTurns - session.CurrentTurn);
+        var choicesAvailable = session.CurrentTurn >= act.DialogueMinTurns;
         return new SessionSnapshotResponse(session.Id, session.Status, session.CurrentAct, session.CurrentTurn, session.Phase,
             ToStateResponse(session), ending, act.TimeLabel, ToSceneResponse(act.Scene), act.Scene.OpeningDialogue,
-            act.MockDialogue.Dialogue, nextActivity, farmingProgress);
+            currentDialogue, nextActivity, farmingProgress, dialogueRemaining, choicesAvailable);
     }
 
     public async Task<DialogueResponse> SubmitDialogueAsync(Guid sessionId, DialogueRequest request)
@@ -73,16 +76,19 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         if (request.NpcId != act.Scene.NpcId) throw new GameRuleException("INVALID_NPC", "현재 장면의 NPC와 일치하지 않습니다.");
         if (string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 300) throw new GameRuleException("INVALID_TEXT", "대화는 1자 이상 300자 이하로 입력해 주세요.");
 
+        if (session.CurrentTurn >= act.DialogueMaxTurns)
+            throw new GameRuleException("DIALOGUE_LIMIT_REACHED", "이 장면의 자유 대화 횟수를 모두 사용했습니다. 결정하기를 눌러 주세요.");
+
+        var npc = await database.NpcStates.SingleAsync(state => state.SessionId == sessionId && state.NpcId == act.Scene.NpcId);
         var generated = await dialogueGeneration.GenerateAsync(GetProviderId(session.Mode), act, request.Text,
-            GetFailureScenario(session.Mode), TraitIds);
+            GetFailureScenario(session.Mode), TraitIds, npc.ConversationSummary);
         var dialogue = generated.Content;
         session.CurrentTurn += 1;
-        var dialogueRemaining = Math.Max(0, act.DialogueLimit - session.CurrentTurn);
-        var choicesAvailable = dialogueRemaining == 0;
+        var dialogueRemaining = Math.Max(0, act.DialogueMaxTurns - session.CurrentTurn);
+        var choicesAvailable = session.CurrentTurn >= act.DialogueMinTurns;
         var response = new DialogueResponse(dialogue.Dialogue, dialogue.Emotion, dialogue.Feedback,
             dialogue.AcceptedTags, dialogue.CareerFeedback, dialogueRemaining, choicesAvailable, generated.ResponseSource,
             generated.FallbackUsed, generated.AttemptCount);
-        var npc = await database.NpcStates.SingleAsync(state => state.SessionId == sessionId && state.NpcId == act.Scene.NpcId);
         npc.Trust = Math.Clamp(npc.Trust + 2, 0, 100);
         npc.ConversationSummary = dialogue.Summary;
         foreach (var tag in dialogue.AcceptedTags.Where(TraitIds.Contains))
@@ -90,9 +96,36 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             var trait = await database.TraitScores.SingleAsync(score => score.SessionId == sessionId && score.TraitId == tag);
             trait.Score = Math.Clamp(trait.Score + 1, 0, 10);
         }
-        session.Phase = choicesAvailable ? "AwaitingChoice" : "AwaitingDialogue";
+        session.Phase = "AwaitingDialogue";
         session.UpdatedAt = DateTimeOffset.UtcNow;
         database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "DialogueGenerated", session.CurrentAct, response, request.IdempotencyKey));
+        await database.SaveChangesAsync();
+        return response;
+    }
+
+    public async Task<DecisionBridgeResponse> SubmitDecisionBridgeAsync(Guid sessionId, DecisionBridgeRequest request)
+    {
+        ValidateIdempotencyKey(request.IdempotencyKey);
+        var duplicate = await FindExistingResponseAsync<DecisionBridgeResponse>(sessionId, request.IdempotencyKey, "DecisionBridgeGenerated");
+        if (duplicate is not null) return duplicate;
+
+        var session = await FindSessionAsync(sessionId);
+        var act = content.GetAct(session.CurrentAct);
+        if (session.Phase != "AwaitingDialogue")
+            throw new GameRuleException("INVALID_TURN", "현재는 결정 단계로 전환할 수 없습니다.");
+        if (session.CurrentTurn < act.DialogueMinTurns)
+            throw new GameRuleException("DIALOGUE_MINIMUM_NOT_REACHED", $"최소 {act.DialogueMinTurns}회 대화한 뒤 결정할 수 있습니다.");
+
+        var npc = await database.NpcStates.SingleAsync(state => state.SessionId == sessionId && state.NpcId == act.Scene.NpcId);
+        var generated = await dialogueGeneration.GenerateDecisionBridgeAsync(GetProviderId(session.Mode), act,
+            GetFailureScenario(session.Mode), TraitIds, npc.ConversationSummary);
+        var response = new DecisionBridgeResponse(generated.Content.Dialogue, generated.Content.Emotion, true,
+            generated.ResponseSource, generated.FallbackUsed, generated.AttemptCount);
+
+        session.Phase = "AwaitingChoice";
+        session.UpdatedAt = DateTimeOffset.UtcNow;
+        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "DecisionBridgeGenerated",
+            session.CurrentAct, response, request.IdempotencyKey));
         await database.SaveChangesAsync();
         return response;
     }
@@ -173,7 +206,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             session.Phase = "AwaitingDialogue";
             if (!await database.NpcStates.AnyAsync(state => state.SessionId == sessionId && state.NpcId == nextContent.Scene.NpcId))
                 database.NpcStates.Add(new NpcState { SessionId = sessionId, NpcId = nextContent.Scene.NpcId, Trust = 20 });
-            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, nextContent.DialogueLimit);
+            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, nextContent.DialogueMaxTurns, false);
         }
 
         var response = new ChoiceResultResponse(choice.ResultNarration, choice.Feedback, choice.Changes, ToStateResponse(session), nextAct, nextActivity, ending);
@@ -228,7 +261,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             session.Phase = "AwaitingDialogue";
             if (!await database.NpcStates.AnyAsync(state => state.SessionId == sessionId && state.NpcId == nextContent.Scene.NpcId))
                 database.NpcStates.Add(new NpcState { SessionId = sessionId, NpcId = nextContent.Scene.NpcId, Trust = 20 });
-            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, nextContent.DialogueLimit);
+            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, nextContent.DialogueMaxTurns, false);
         }
         var response = new FarmingResultResponse(score, string.Join(" ", feedbackParts), changes, ToStateResponse(session), nextAct, ending);
 
@@ -262,6 +295,17 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         session.UpdatedAt = DateTimeOffset.UtcNow;
         await database.SaveChangesAsync();
         return response;
+    }
+
+    private async Task<string?> GetLatestDialogueTextAsync(Guid sessionId)
+    {
+        var gameEvent = await database.GameEvents.Where(candidate => candidate.SessionId == sessionId
+                && (candidate.EventType == "DialogueGenerated" || candidate.EventType == "DecisionBridgeGenerated"))
+            .OrderByDescending(candidate => candidate.Sequence)
+            .FirstOrDefaultAsync();
+        if (gameEvent is null) return null;
+        using var payload = JsonDocument.Parse(gameEvent.PayloadJson);
+        return payload.RootElement.TryGetProperty("dialogue", out var dialogue) ? dialogue.GetString() : null;
     }
 
     private async Task<GameSession> FindSessionAsync(Guid id) =>
