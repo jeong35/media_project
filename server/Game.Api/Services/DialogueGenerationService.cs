@@ -7,7 +7,8 @@ public sealed record GeneratedDialogue(string Dialogue, string Emotion, string F
 public sealed record DialogueGenerationResult(GeneratedDialogue Content, string ResponseSource,
     bool FallbackUsed, int AttemptCount);
 public sealed record DialogueProviderRequest(MockActContent Act, string PlayerText,
-    string FailureScenario, int Attempt, IReadOnlyList<string> AllowedTags, string PublicPersonaJson);
+    string FailureScenario, int Attempt, IReadOnlyList<string> AllowedTags, string PublicPersonaJson,
+    string ConversationSummary = "", bool DecisionBridge = false, string ChoiceContext = "");
 
 public interface IDialogueProvider
 {
@@ -51,12 +52,26 @@ public sealed class DialogueGenerationService(IEnumerable<IDialogueProvider> pro
     private readonly IReadOnlyDictionary<string, IDialogueProvider> providersById = providers
         .ToDictionary(provider => provider.ProviderId, StringComparer.OrdinalIgnoreCase);
 
-    public async Task<DialogueGenerationResult> GenerateAsync(string providerId, MockActContent act,
+    public Task<DialogueGenerationResult> GenerateAsync(string providerId, MockActContent act,
         string playerText, string failureScenario, IReadOnlyList<string> allowedTags,
+        string conversationSummary = "", CancellationToken cancellationToken = default) =>
+        GenerateCoreAsync(providerId, act, playerText, failureScenario, allowedTags, conversationSummary, false, "", cancellationToken);
+
+    public Task<DialogueGenerationResult> GenerateDecisionBridgeAsync(string providerId, MockActContent act,
+        string failureScenario, IReadOnlyList<string> allowedTags, string conversationSummary,
         CancellationToken cancellationToken = default)
     {
+        var choiceContext = string.Join("\n", act.Choices.Select(choice => $"- {choice.Label}"));
+        return GenerateCoreAsync(providerId, act, "플레이어가 결정을 내리기 위해 대화를 마쳤다.", failureScenario,
+            allowedTags, conversationSummary, true, choiceContext, cancellationToken);
+    }
+
+    private async Task<DialogueGenerationResult> GenerateCoreAsync(string providerId, MockActContent act,
+        string playerText, string failureScenario, IReadOnlyList<string> allowedTags, string conversationSummary,
+        bool decisionBridge, string choiceContext, CancellationToken cancellationToken)
+    {
         if (!providersById.TryGetValue(providerId, out var provider))
-            return FixedFallback(act, 0);
+            return FixedFallback(act, 0, decisionBridge);
 
         var publicPersonaJson = NpcPersonaPromptBuilder.Build(personaCatalog.Get(act.Scene.NpcId));
         var maximumAttempts = Math.Clamp(provider.MaximumAttempts, 1, 3);
@@ -65,7 +80,8 @@ public sealed class DialogueGenerationService(IEnumerable<IDialogueProvider> pro
             try
             {
                 var raw = await provider.GenerateAsync(
-                    new DialogueProviderRequest(act, playerText, failureScenario, attempt, allowedTags, publicPersonaJson),
+                    new DialogueProviderRequest(act, playerText, failureScenario, attempt, allowedTags, publicPersonaJson,
+                        conversationSummary, decisionBridge, choiceContext),
                     cancellationToken);
                 var generated = JsonSerializer.Deserialize<GeneratedDialogue>(raw, JsonOptions)
                     ?? throw new JsonException("Dialogue payload was empty.");
@@ -74,7 +90,7 @@ public sealed class DialogueGenerationService(IEnumerable<IDialogueProvider> pro
             }
             catch (DialogueProviderException error) when (!error.Retryable)
             {
-                return FixedFallback(act, attempt);
+                return FixedFallback(act, attempt, decisionBridge);
             }
             catch (Exception error) when (error is HttpRequestException or TimeoutException or JsonException or InvalidDataException)
             {
@@ -84,16 +100,21 @@ public sealed class DialogueGenerationService(IEnumerable<IDialogueProvider> pro
             {
                 if (attempt >= maximumAttempts) continue;
                 var delay = error.RetryAfter ?? TimeSpan.FromMilliseconds(100 * attempt);
-                if (delay > TimeSpan.FromSeconds(5)) return FixedFallback(act, attempt);
+                if (delay > TimeSpan.FromSeconds(5)) return FixedFallback(act, attempt, decisionBridge);
                 if (delay > TimeSpan.Zero) await Task.Delay(delay, cancellationToken);
             }
         }
 
-        return FixedFallback(act, maximumAttempts);
+        return FixedFallback(act, maximumAttempts, decisionBridge);
     }
 
-    private static DialogueGenerationResult FixedFallback(MockActContent act, int attemptCount)
+    private static DialogueGenerationResult FixedFallback(MockActContent act, int attemptCount, bool decisionBridge = false)
     {
+        if (decisionBridge)
+            return new DialogueGenerationResult(new GeneratedDialogue(act.DecisionBridgeDialogue, act.DecisionBridgeEmotion,
+                "대화를 바탕으로 결정 단계로 넘어갑니다.", [], "", "결정 단계로 전환했다."),
+                "fixed_fallback", true, attemptCount);
+
         var fallback = act.MockDialogue;
         return new DialogueGenerationResult(new GeneratedDialogue(fallback.Dialogue, fallback.Emotion,
             fallback.Feedback, fallback.AcceptedTags, fallback.CareerFeedback, fallback.Summary),
