@@ -142,5 +142,8 @@
       }
     }
   },
-  "dialogueLimit": 2
+  "dialogueMinTurns": 2,
+  "dialogueMaxTurns": 5,
+  "decisionBridgeDialogue": "좋아요. 말로만 정할 수 있는 문제는 이쯤이면 충분히 봤네요. 이제 직접 밭을 보면서 어디에 자원을 쓸지 정해 봅시다.",
+  "decisionBridgeEmotion": "smiling"
 }
