@@ -35,6 +35,7 @@ foreach (var scenario in scenarios)
     results.Add(await RunFateScenarioAsync(content, scenario));
 results.Add(await RunTimeoutGuardAsync(content));
 results.Add(await RunIdempotencyAsync(content));
+results.Add(await RunDecisionBridgeGuardAsync(content));
 results.Add(RunLegacyEndingCompatibility());
 results.Add(await RunDialogueFailureScenarioAsync(content, "transient_once", false, "mock"));
 results.Add(await RunDialogueFailureScenarioAsync(content, "invalid_payload", true, "fixed_fallback"));
@@ -146,19 +147,55 @@ static async Task<TestResult> RunIdempotencyAsync(MockGameContent content)
             new DialogueRequest(start.Scene.NpcId, "기사단을 정비한다.", dialogueKey));
         await fixture.Service.SubmitDialogueAsync(start.SessionId,
             new DialogueRequest(start.Scene.NpcId, "비용과 위험도도 비교한다.", NewKey()));
+        await fixture.Service.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
         var choiceKey = NewKey();
         await fixture.Service.SubmitChoiceAsync(start.SessionId, new ChoiceRequest("rebuild_knights", choiceKey));
         await fixture.Service.SubmitChoiceAsync(start.SessionId, new ChoiceRequest("rebuild_knights", choiceKey));
         var snapshot = await fixture.Service.GetSessionAsync(start.SessionId);
         var actual = $"군사 {snapshot.State.Military}, 재정 {snapshot.State.Treasury}";
         var eventCount = await fixture.Database.GameEvents.CountAsync(gameEvent => gameEvent.SessionId == start.SessionId);
-        var passed = actual == expected && eventCount == 3;
+        var passed = actual == expected && eventCount == 5;
         return new TestResult("중복 요청 방지", expected, actual, $"이벤트 {eventCount}개", passed,
             passed ? null : "동일 idempotencyKey가 상태나 이벤트를 중복 적용했습니다.");
     }
     catch (Exception error)
     {
         return new TestResult("중복 요청 방지", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunDecisionBridgeGuardAsync(MockGameContent content)
+{
+    const string expected = "2턴 전 차단/2턴 후 허용";
+    try
+    {
+        await using var fixture = await GameFixture.CreateAsync(content);
+        var start = await fixture.Service.StartSessionAsync("mock");
+        await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, "여기가 어디인지부터 알고 싶다.", NewKey()));
+
+        var blocked = false;
+        try
+        {
+            await fixture.Service.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
+        }
+        catch (GameRuleException error)
+        {
+            blocked = error.Code == "DIALOGUE_MINIMUM_NOT_REACHED";
+        }
+
+        await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, "그럼 지금 가장 급한 문제는 뭐지?", NewKey()));
+        var bridge = await fixture.Service.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
+        var snapshot = await fixture.Service.GetSessionAsync(start.SessionId);
+        var passed = blocked && bridge.ChoicesAvailable && snapshot.Phase == "AwaitingChoice";
+        return new TestResult("결정 전환 최소 대화 검증", expected,
+            passed ? expected : "전환 규칙 불일치", snapshot.Phase, passed,
+            passed ? null : "최소 대화 수 또는 전환 상태 검증에 실패했습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("결정 전환 최소 대화 검증", expected, error.GetType().Name, "-", false, error.Message);
     }
 }
 
@@ -195,7 +232,7 @@ static async Task<TestResult> RunDialogueFailureScenarioAsync(MockGameContent co
             new DialogueRequest(start.Scene.NpcId, "실패 상황에서도 계획을 계속한다.", NewKey()));
         var snapshot = await fixture.Service.GetSessionAsync(start.SessionId);
         var passed = response.FallbackUsed == expectedFallback && response.ResponseSource == expectedSource
-            && response.AttemptCount == 2 && !response.ChoicesAvailable && response.DialogueRemaining == 1
+            && response.AttemptCount == 2 && !response.ChoicesAvailable && response.DialogueRemaining == 4
             && snapshot.Phase == "AwaitingDialogue";
         var expected = $"{expectedSource}/fallback={expectedFallback.ToString().ToLowerInvariant()}/선택 진행";
         var actual = $"{response.ResponseSource}/fallback={response.FallbackUsed.ToString().ToLowerInvariant()}/{snapshot.Phase}";
@@ -220,7 +257,7 @@ static async Task<TestResult> RunLiveProviderScenarioAsync(MockGameContent conte
         var snapshot = await fixture.Service.GetSessionAsync(start.SessionId);
         var passed = response.ResponseSource == expectedSource && response.FallbackUsed == expectedFallback
             && response.AttemptCount == expectedAttempts && !response.ChoicesAvailable
-            && response.DialogueRemaining == 1 && snapshot.Phase == "AwaitingDialogue";
+            && response.DialogueRemaining == 4 && snapshot.Phase == "AwaitingDialogue";
         var expected = $"{expectedSource}/fallback={expectedFallback.ToString().ToLowerInvariant()}/시도 {expectedAttempts}";
         var actual = $"{response.ResponseSource}/fallback={response.FallbackUsed.ToString().ToLowerInvariant()}/시도 {response.AttemptCount}";
         return new TestResult($"Live Provider-{((StubDialogueProvider)liveProvider).Behavior}", expected, actual,
@@ -516,16 +553,19 @@ static async Task<Guid> AdvanceToFarmingAsync(MockGameService game)
     var start = await game.StartSessionAsync("mock");
     await game.SubmitDialogueAsync(start.SessionId, new DialogueRequest(start.Scene.NpcId, "현재 상황부터 정리한다.", NewKey()));
     await game.SubmitDialogueAsync(start.SessionId, new DialogueRequest(start.Scene.NpcId, "첫 결정을 내린다.", NewKey()));
+    await game.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
     var act1 = await game.SubmitChoiceAsync(start.SessionId, new ChoiceRequest("prepare_evacuation", NewKey()));
     await game.SubmitDialogueAsync(start.SessionId,
         new DialogueRequest(act1.NextAct!.Scene.NpcId, "확실한 사실과 가설을 나눠 설명해 달라.", NewKey()));
     await game.SubmitDialogueAsync(start.SessionId,
         new DialogueRequest(act1.NextAct!.Scene.NpcId, "균열 대응책을 정한다.", NewKey()));
+    await game.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
     var act2 = await game.SubmitChoiceAsync(start.SessionId, new ChoiceRequest("research_ward", NewKey()));
     await game.SubmitDialogueAsync(start.SessionId,
         new DialogueRequest(act2.NextAct!.Scene.NpcId, "주민들이 가장 힘든 점을 묻는다.", NewKey()));
     await game.SubmitDialogueAsync(start.SessionId,
         new DialogueRequest(act2.NextAct!.Scene.NpcId, "주민의 밭을 돕는다.", NewKey()));
+    await game.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
     var act3 = await game.SubmitChoiceAsync(start.SessionId, new ChoiceRequest("farm_with_residents", NewKey()));
     Assert(act3.NextActivity?.ActivityId == "farming", "농사 활동으로 전환되지 않았습니다.");
     return start.SessionId;
@@ -537,6 +577,7 @@ static async Task<FinalChoiceProgress> AdvanceToFinalChoiceAsync(MockGameService
     var start = await game.StartSessionAsync(mode);
     await game.SubmitDialogueAsync(start.SessionId, new DialogueRequest(start.Scene.NpcId, "현재 상황부터 정리한다.", NewKey()));
     await game.SubmitDialogueAsync(start.SessionId, new DialogueRequest(start.Scene.NpcId, "첫 결정을 내린다.", NewKey()));
+    await game.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
     var act1 = await game.SubmitChoiceAsync(start.SessionId, new ChoiceRequest(scenario.Act1Choice, NewKey()));
     Assert(act1.NextAct?.Act == 2, "Act 2로 전환되지 않았습니다.");
 
@@ -544,6 +585,7 @@ static async Task<FinalChoiceProgress> AdvanceToFinalChoiceAsync(MockGameService
         new DialogueRequest(act1.NextAct!.Scene.NpcId, "확실한 사실과 가설을 나눠 설명해 달라.", NewKey()));
     await game.SubmitDialogueAsync(start.SessionId,
         new DialogueRequest(act1.NextAct!.Scene.NpcId, "균열 대응책을 정한다.", NewKey()));
+    await game.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
     var act2 = await game.SubmitChoiceAsync(start.SessionId, new ChoiceRequest(scenario.Act2Choice, NewKey()));
     Assert(act2.NextAct?.Act == 3, "Act 3으로 전환되지 않았습니다.");
 
@@ -551,6 +593,7 @@ static async Task<FinalChoiceProgress> AdvanceToFinalChoiceAsync(MockGameService
         new DialogueRequest(act2.NextAct!.Scene.NpcId, "주민들이 가장 힘든 점을 묻는다.", NewKey()));
     await game.SubmitDialogueAsync(start.SessionId,
         new DialogueRequest(act2.NextAct!.Scene.NpcId, "주민의 밭을 돕는다.", NewKey()));
+    await game.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
     var act3 = await game.SubmitChoiceAsync(start.SessionId, new ChoiceRequest(scenario.Act3Choice, NewKey()));
     Assert(act3.NextActivity?.ActivityId == "farming", "농사 활동으로 전환되지 않았습니다.");
 
@@ -560,7 +603,8 @@ static async Task<FinalChoiceProgress> AdvanceToFinalChoiceAsync(MockGameService
     Assert(farming.NextAct?.Act == 4, "Act 4로 전환되지 않았습니다.");
 
     await game.SubmitDialogueAsync(start.SessionId,
-        new DialogueRequest(farming.NextAct!.Scene.NpcId, "최종 명령을 내린다.", NewKey()));
+        new DialogueRequest(farming.NextAct!.Scene.NpcId, "최종 명령 전에 위험을 확인한다.", NewKey()));
+    await game.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
     var choices = await game.GetChoicesAsync(start.SessionId);
     Assert(choices.Choices.Count == 4, "Act 4 최종 선택지가 4개가 아닙니다.");
     Assert(choices.TimeLimitSeconds == 20, "Act 4 제한시간이 20초가 아닙니다.");
