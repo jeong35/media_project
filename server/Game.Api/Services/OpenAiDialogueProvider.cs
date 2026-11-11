@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
@@ -16,7 +17,8 @@ public sealed class OpenAiOptions
     public int MaxRetries { get; init; } = 1;
 }
 
-public sealed class OpenAiDialogueProvider(HttpClient httpClient, IOptions<OpenAiOptions> options) : IDialogueProvider
+public sealed class OpenAiDialogueProvider(HttpClient httpClient, IOptions<OpenAiOptions> options,
+    LiveApiMetrics liveApiMetrics) : IDialogueProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly OpenAiOptions settings = options.Value;
@@ -34,27 +36,38 @@ public sealed class OpenAiDialogueProvider(HttpClient httpClient, IOptions<OpenA
         message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
         message.Content = JsonContent.Create(BuildRequest(request), options: JsonOptions);
 
-        HttpResponseMessage response;
+        var stopwatch = Stopwatch.StartNew();
         try
         {
-            response = await httpClient.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-        }
-        catch (OperationCanceledException error) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new DialogueProviderException("OpenAI request timed out.", true, innerException: error);
-        }
-        catch (HttpRequestException error)
-        {
-            throw new DialogueProviderException("OpenAI request could not be completed.", true, innerException: error);
-        }
+            HttpResponseMessage response;
+            try
+            {
+                response = await httpClient.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            }
+            catch (OperationCanceledException error) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new DialogueProviderException("OpenAI request timed out.", true, innerException: error);
+            }
+            catch (HttpRequestException error)
+            {
+                throw new DialogueProviderException("OpenAI request could not be completed.", true, innerException: error);
+            }
 
-        using (response)
-        {
-            var responseJson = await response.Content.ReadAsStringAsync(timeout.Token);
-            if (!response.IsSuccessStatusCode)
-                throw CreateHttpError(response, responseJson);
+            using (response)
+            {
+                var responseJson = await response.Content.ReadAsStringAsync(timeout.Token);
+                if (!response.IsSuccessStatusCode)
+                    throw CreateHttpError(response, responseJson);
 
-            return ExtractOutputText(responseJson);
+                var output = ExtractOutputText(responseJson);
+                liveApiMetrics.RecordNetworkCall(LiveApiOperation.Dialogue, stopwatch.Elapsed, true);
+                return output;
+            }
+        }
+        catch
+        {
+            liveApiMetrics.RecordNetworkCall(LiveApiOperation.Dialogue, stopwatch.Elapsed, false);
+            throw;
         }
     }
 
@@ -68,14 +81,21 @@ public sealed class OpenAiDialogueProvider(HttpClient httpClient, IOptions<OpenA
                 role = "developer",
                 content = "당신은 한국어 판타지 게임의 NPC 대사 생성기다. 주어진 장면과 플레이어 발화에만 반응한다. " +
                     "능력치 변화, 성공 여부, 다음 Act, 영지 운명과 직업을 결정하지 않는다. 허용된 성향 태그만 반환한다. " +
-                    "제공된 공개 페르소나만 사용하며 과거사나 숨겨진 성향을 추측하거나 새로 만들지 않는다."
+                    "제공된 공개 페르소나만 사용하며 과거사나 숨겨진 성향을 추측하거나 새로 만들지 않는다. " +
+                    "이전 대화 문맥이 있으면 그 사실, 약속, 질문을 이어서 답한다. summary에는 이전 누적 요약과 이번 대화를 합쳐 " +
+                    "다음 턴에 필요한 사실, 약속, 미해결 질문을 500자 이내로 요약한다. " +
+                    "이번 발화에서 직업 성향 근거를 찾을 수 없으면 careerFeedback은 억지로 만들지 말고 null로 반환한다."
             },
             new
             {
                 role = "user",
                 content = $"공개 NPC 페르소나(JSON): {request.PublicPersonaJson}\n" +
                     $"NPC: {request.Act.Scene.NpcName}\n장면: {request.Act.Scene.Narration}\n" +
-                    $"NPC의 첫 대사: {request.Act.Scene.OpeningDialogue}\n플레이어 발화: {request.PlayerText}"
+                    $"NPC의 첫 대사: {request.Act.Scene.OpeningDialogue}\n" +
+                    $"이전까지의 누적 대화 요약: {ContextOrDefault(request.ConversationContext.Summary)}\n" +
+                    $"직전 플레이어 발화: {ContextOrDefault(request.ConversationContext.PreviousPlayerText)}\n" +
+                    $"직전 NPC 답변: {ContextOrDefault(request.ConversationContext.PreviousNpcDialogue)}\n" +
+                    $"현재 플레이어 발화: {request.PlayerText}"
             }
         },
         max_output_tokens = Math.Clamp(settings.MaxOutputTokens, 100, 2_000),
@@ -91,17 +111,17 @@ public sealed class OpenAiDialogueProvider(HttpClient httpClient, IOptions<OpenA
                     type = "object",
                     properties = new Dictionary<string, object>
                     {
-                        ["dialogue"] = new { type = "string" },
-                        ["emotion"] = new { type = "string" },
-                        ["feedback"] = new { type = "string" },
+                        ["dialogue"] = new { type = "string", minLength = 1, maxLength = 500 },
+                        ["emotion"] = new { type = "string", minLength = 1, maxLength = 50 },
+                        ["feedback"] = new { type = "string", minLength = 1, maxLength = 300 },
                         ["acceptedTags"] = new
                         {
                             type = "array",
                             items = new { type = "string", @enum = request.AllowedTags },
                             maxItems = 3
                         },
-                        ["careerFeedback"] = new { type = "string" },
-                        ["summary"] = new { type = "string" }
+                        ["careerFeedback"] = new { type = new[] { "string", "null" }, minLength = 1, maxLength = 300 },
+                        ["summary"] = new { type = "string", minLength = 1, maxLength = 500 }
                     },
                     required = new[] { "dialogue", "emotion", "feedback", "acceptedTags", "careerFeedback", "summary" },
                     additionalProperties = false
@@ -109,6 +129,9 @@ public sealed class OpenAiDialogueProvider(HttpClient httpClient, IOptions<OpenA
             }
         }
     };
+
+    private static string ContextOrDefault(string value) =>
+        string.IsNullOrWhiteSpace(value) ? "(없음 - 첫 대화)" : value;
 
     private static DialogueProviderException CreateHttpError(HttpResponseMessage response, string responseJson)
     {

@@ -5,6 +5,7 @@ const SESSION_FILE := "user://last_session.cfg"
 const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 
 @onready var title_screen: VBoxContainer = $Page/TitleScreen
+@onready var live_mode_toggle: CheckButton = $Page/TitleScreen/LiveModeToggle
 @onready var new_game_button: Button = $Page/TitleScreen/NewGameButton
 @onready var continue_button: Button = $Page/TitleScreen/ContinueButton
 @onready var connection_status: Label = $Page/TitleScreen/ConnectionStatus
@@ -118,6 +119,7 @@ var quit_after_checkpoint := false
 func _ready() -> void:
 	new_game_button.pressed.connect(_start_new_game)
 	continue_button.pressed.connect(_continue_game)
+	live_mode_toggle.toggled.connect(_on_live_mode_toggled)
 	send_button.pressed.connect(_submit_dialogue)
 	next_choices_button.pressed.connect(_fetch_choices)
 	restart_button.pressed.connect(_start_new_game)
@@ -171,6 +173,8 @@ func _process(_delta: float) -> void:
 
 
 func _start_new_game() -> void:
+	var provider_mode := "live" if live_mode_toggle.button_pressed and not smoke_test else "mock"
+	var failure_scenario := mock_failure_scenario if provider_mode == "mock" else "none"
 	session_id = ""
 	choice_ids.clear()
 	feedback.text = ""
@@ -184,12 +188,13 @@ func _start_new_game() -> void:
 	final_choice_screen.hide()
 	ending_screen.hide()
 	final_choice_timer.stop()
-	connection_status.text = "새 세션을 만드는 중…"
+	connection_status.text = "Live API 세션을 만드는 중…" if provider_mode == "live" else "Mock 세션을 만드는 중…"
 	new_game_button.disabled = true
 	continue_button.disabled = true
+	live_mode_toggle.disabled = true
 	_request_json("start", HTTPClient.METHOD_POST, "/api/v1/sessions", {
-		"mode": "mock",
-		"failureScenario": mock_failure_scenario
+		"mode": provider_mode,
+		"failureScenario": failure_scenario
 	})
 
 
@@ -203,7 +208,12 @@ func _continue_game() -> void:
 	connection_status.text = "저장된 세션을 불러오는 중…"
 	new_game_button.disabled = true
 	continue_button.disabled = true
+	live_mode_toggle.disabled = true
 	_request_json("resume", HTTPClient.METHOD_GET, "/api/v1/sessions/%s" % session_id)
+
+
+func _on_live_mode_toggled(enabled: bool) -> void:
+	connection_status.text = "Live API 모드 · 실제 호출 비용이 발생합니다." if enabled else "Mock 모드 · 로컬 서버 필요"
 
 
 func _submit_dialogue() -> void:
@@ -277,7 +287,10 @@ func _request_json(kind: String, method: HTTPClient.Method, path: String, payloa
 
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if result != HTTPRequest.RESULT_SUCCESS:
-		_show_error("서버에 연결할 수 없습니다. 로컬 서버를 먼저 실행해 주세요.")
+		if result == HTTPRequest.RESULT_TIMEOUT:
+			_show_error("AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.")
+		else:
+			_show_error("서버에 연결할 수 없습니다. 로컬 서버를 먼저 실행해 주세요.")
 		return
 	var payload: Variant = JSON.parse_string(body.get_string_from_utf8())
 	if not payload is Dictionary:
@@ -298,12 +311,14 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 
 
 func _show_session(payload: Dictionary) -> void:
+	live_mode_toggle.disabled = false
 	session_id = str(payload.get("sessionId", ""))
 	_save_session_reference(session_id)
 	_show_act(payload)
 
 
 func _show_resume(payload: Dictionary) -> void:
+	live_mode_toggle.disabled = false
 	session_id = str(payload.get("sessionId", ""))
 	_save_session_reference(session_id)
 	var phase := str(payload.get("phase", ""))
@@ -381,10 +396,18 @@ func _show_dialogue(payload: Dictionary) -> void:
 	var response_emotion := str(payload.get("emotion", "neutral"))
 	npc_emotion.text = _translate_emotion(response_emotion)
 	_update_character_art(current_npc_id, response_emotion)
-	var fallback_note := "\n대화 생성에 실패해 준비된 대사를 사용했습니다." if payload.get("fallbackUsed", false) else ""
 	var remaining := int(payload.get("dialogueRemaining", 0))
 	var choices_available := bool(payload.get("choicesAvailable", true))
-	feedback.text = "%s\n%s%s" % [payload.get("feedback", ""), payload.get("careerFeedback", ""), fallback_note]
+	var feedback_lines := PackedStringArray()
+	var general_feedback := str(payload.get("feedback", "")).strip_edges()
+	var career_feedback := str(payload.get("careerFeedback", "")).strip_edges()
+	if not general_feedback.is_empty():
+		feedback_lines.append("행동 평가 · %s" % general_feedback)
+	if not career_feedback.is_empty():
+		feedback_lines.append("성향 평가 · %s" % career_feedback)
+	if payload.get("fallbackUsed", false):
+		feedback_lines.append("대화 생성에 실패해 준비된 대사를 사용했습니다.")
+	feedback.text = "\n".join(feedback_lines)
 	if choices_available:
 		player_input.hide()
 		send_button.hide()
@@ -774,6 +797,7 @@ func _show_error(message: String) -> void:
 	feedback.text = message
 	new_game_button.disabled = false
 	continue_button.disabled = saved_session_id.is_empty()
+	live_mode_toggle.disabled = false
 	send_button.disabled = false
 	player_input.editable = true
 	farming_finish_button.disabled = false

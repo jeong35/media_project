@@ -14,6 +14,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
     private static readonly string[] AffinityIds = ["martial", "arcane", "diplomacy", "commerce", "leadership", "craft"];
     private static readonly string[] FailureScenarios = ["none", "transient_once", "invalid_payload", "timeout"];
     private sealed record FinalChoiceTimerEvent(DateTimeOffset DeadlineUtc);
+    private sealed record PreviousDialogueTurn(string PlayerText, string NpcDialogue);
 
     public async Task<SessionStartResponse> StartSessionAsync(string mode, string failureScenario = "none")
     {
@@ -73,16 +74,19 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         if (request.NpcId != act.Scene.NpcId) throw new GameRuleException("INVALID_NPC", "현재 장면의 NPC와 일치하지 않습니다.");
         if (string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 300) throw new GameRuleException("INVALID_TEXT", "대화는 1자 이상 300자 이하로 입력해 주세요.");
 
+        var npc = await database.NpcStates.SingleAsync(state => state.SessionId == sessionId && state.NpcId == act.Scene.NpcId);
+        var previousTurn = await GetLatestDialogueTurnAsync(sessionId, session.CurrentAct);
+        var conversationContext = new DialogueConversationContext(npc.ConversationSummary,
+            previousTurn?.PlayerText ?? "", previousTurn?.NpcDialogue ?? "");
         var generated = await dialogueGeneration.GenerateAsync(GetProviderId(session.Mode), act, request.Text,
-            GetFailureScenario(session.Mode), TraitIds);
+            GetFailureScenario(session.Mode), TraitIds, conversationContext);
         var dialogue = generated.Content;
         session.CurrentTurn += 1;
         var dialogueRemaining = Math.Max(0, act.DialogueLimit - session.CurrentTurn);
         var choicesAvailable = dialogueRemaining == 0;
         var response = new DialogueResponse(dialogue.Dialogue, dialogue.Emotion, dialogue.Feedback,
-            dialogue.AcceptedTags, dialogue.CareerFeedback, dialogueRemaining, choicesAvailable, generated.ResponseSource,
+            dialogue.AcceptedTags, dialogue.CareerFeedback ?? "", dialogueRemaining, choicesAvailable, generated.ResponseSource,
             generated.FallbackUsed, generated.AttemptCount);
-        var npc = await database.NpcStates.SingleAsync(state => state.SessionId == sessionId && state.NpcId == act.Scene.NpcId);
         npc.Trust = Math.Clamp(npc.Trust + 2, 0, 100);
         npc.ConversationSummary = dialogue.Summary;
         foreach (var tag in dialogue.AcceptedTags.Where(TraitIds.Contains))
@@ -92,7 +96,8 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         }
         session.Phase = choicesAvailable ? "AwaitingChoice" : "AwaitingDialogue";
         session.UpdatedAt = DateTimeOffset.UtcNow;
-        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "DialogueGenerated", session.CurrentAct, response, request.IdempotencyKey));
+        database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "DialogueGenerated",
+            session.CurrentAct, BuildDialogueEventPayload(response, request.Text, dialogue.Summary), request.IdempotencyKey));
         await database.SaveChangesAsync();
         return response;
     }
@@ -286,6 +291,21 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         return gameEvent is null ? null : JsonSerializer.Deserialize<FarmingProgressResponse>(gameEvent.PayloadJson, JsonOptions);
     }
 
+    private async Task<PreviousDialogueTurn?> GetLatestDialogueTurnAsync(Guid sessionId, int act)
+    {
+        var gameEvent = await database.GameEvents.Where(candidate => candidate.SessionId == sessionId
+                && candidate.EventType == "DialogueGenerated" && candidate.Act == act)
+            .OrderByDescending(candidate => candidate.Sequence)
+            .FirstOrDefaultAsync();
+        if (gameEvent is null) return null;
+
+        using var document = JsonDocument.Parse(gameEvent.PayloadJson);
+        var root = document.RootElement;
+        var playerText = root.TryGetProperty("playerText", out var player) ? player.GetString() ?? "" : "";
+        var npcDialogue = root.TryGetProperty("dialogue", out var dialogue) ? dialogue.GetString() ?? "" : "";
+        return new PreviousDialogueTurn(playerText, npcDialogue);
+    }
+
     private async Task<FinalChoiceTimerEvent?> GetFinalChoiceTimerAsync(Guid sessionId, MockActContent act, bool startIfMissing)
     {
         var gameEvent = await database.GameEvents.SingleOrDefaultAsync(candidate =>
@@ -310,6 +330,23 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
     {
         Id = Guid.NewGuid(), SessionId = sessionId, Sequence = sequence, EventType = eventType, Act = act,
         PayloadJson = JsonSerializer.Serialize(payload, JsonOptions), CreatedAt = DateTimeOffset.UtcNow, IdempotencyKey = key
+    };
+
+    private static IReadOnlyDictionary<string, object?> BuildDialogueEventPayload(DialogueResponse response,
+        string playerText, string conversationSummary) => new Dictionary<string, object?>
+    {
+        ["dialogue"] = response.Dialogue,
+        ["emotion"] = response.Emotion,
+        ["feedback"] = response.Feedback,
+        ["acceptedTags"] = response.AcceptedTags,
+        ["careerFeedback"] = response.CareerFeedback,
+        ["dialogueRemaining"] = response.DialogueRemaining,
+        ["choicesAvailable"] = response.ChoicesAvailable,
+        ["responseSource"] = response.ResponseSource,
+        ["fallbackUsed"] = response.FallbackUsed,
+        ["attemptCount"] = response.AttemptCount,
+        ["playerText"] = playerText,
+        ["conversationSummary"] = conversationSummary
     };
 
     private static void ValidateIdempotencyKey(string key)

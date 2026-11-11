@@ -45,8 +45,12 @@ results.Add(await RunLiveProviderScenarioAsync(content, new StubDialogueProvider
     "openai", false, 2));
 results.Add(await RunLiveProviderScenarioAsync(content, new StubDialogueProvider("openai", StubProviderBehavior.PermanentFailure),
     "fixed_fallback", true, 1));
+results.Add(await RunLiveProviderScenarioAsync(content, new StubDialogueProvider("openai", StubProviderBehavior.NullCareerFeedback),
+    "openai", false, 1));
 results.Add(RunPersonaPromptBoundary());
+results.Add(RunLiveApiMetricsAggregation());
 results.Add(await RunOpenAiHttpContractAsync(content));
+results.Add(await RunDialogueContextContinuityAsync(content));
 results.Add(await RunOpenAiQuotaFallbackAsync(content));
 results.Add(await RunLiveCareerEndingScenarioAsync(content, CareerStubBehavior.Success,
     "openai", false, "북부의 구국의 기사단장"));
@@ -152,9 +156,9 @@ static async Task<TestResult> RunIdempotencyAsync(MockGameContent content)
         var snapshot = await fixture.Service.GetSessionAsync(start.SessionId);
         var actual = $"군사 {snapshot.State.Military}, 재정 {snapshot.State.Treasury}";
         var eventCount = await fixture.Database.GameEvents.CountAsync(gameEvent => gameEvent.SessionId == start.SessionId);
-        var passed = actual == expected && eventCount == 3;
+        var passed = actual == expected && eventCount == 4;
         return new TestResult("중복 요청 방지", expected, actual, $"이벤트 {eventCount}개", passed,
-            passed ? null : "동일 idempotencyKey가 상태나 이벤트를 중복 적용했습니다.");
+            passed ? null : "세션 시작, 고유 대화 2회, 선택 1회가 각각 한 번만 기록되어야 합니다.");
     }
     catch (Exception error)
     {
@@ -246,31 +250,114 @@ static async Task<TestResult> RunOpenAiHttpContractAsync(MockGameContent content
                 { new { type = "output_text", text = JsonSerializer.Serialize(generated, new JsonSerializerOptions(JsonSerializerDefaults.Web)) } } } }
         }));
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.openai.com/v1/") };
+        var metrics = new LiveApiMetrics();
         var provider = new OpenAiDialogueProvider(client, Options.Create(new OpenAiOptions
         {
             ApiKey = "test-placeholder", Model = "test-model", TimeoutSeconds = 2, MaxOutputTokens = 300
-        }));
+        }), metrics);
         var personaJson = NpcPersonaPromptBuilder.Build(NpcPersonaCatalog.Load().Get("steward_edwin"));
+        var context = new DialogueConversationContext("주민 안전을 먼저 검토하기로 했다.",
+            "비용도 함께 알려 달라.", "세 가지 방안의 비용을 정리하겠습니다.");
         var raw = await provider.GenerateAsync(new DialogueProviderRequest(content.GetAct(1), "주민을 먼저 지킨다.",
-            "none", 1, ["kind", "pragmatic"], personaJson));
+            "none", 1, ["kind", "pragmatic"], personaJson, context));
         var parsed = JsonSerializer.Deserialize<GeneratedDialogue>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         using var requestDocument = JsonDocument.Parse(handler.RequestBody!);
         var prompt = requestDocument.RootElement.GetProperty("input")[1].GetProperty("content").GetString()!;
         var requestOk = handler.RequestBody?.Contains("\"json_schema\"") == true
             && handler.RequestBody.Contains("\"additionalProperties\":false")
-            && !handler.RequestBody.Contains("maxLength")
+            && handler.RequestBody.Contains("\"maxLength\":500")
+            && handler.RequestBody.Contains("\"maxLength\":300")
+            && handler.RequestBody.Contains("\"minLength\":1")
+            && handler.RequestBody.Contains("\"type\":[\"string\",\"null\"]")
             && prompt.Contains("core_traits") && prompt.Contains("결론부터 말한다")
+            && prompt.Contains(context.Summary) && prompt.Contains(context.PreviousPlayerText)
+            && prompt.Contains(context.PreviousNpcDialogue) && prompt.Contains("현재 플레이어 발화")
             && !prompt.Contains("hidden_traits") && !prompt.Contains("backstory_elements")
             && !prompt.Contains("career_influence_weights") && !prompt.Contains("disclosure_policy")
             && handler.AuthorizationScheme == "Bearer" && handler.RequestUri?.AbsolutePath == "/v1/responses";
-        var passed = handler.CallCount == 1 && requestOk && parsed?.Dialogue == generated.Dialogue;
+        var metric = metrics.Snapshot().Dialogue;
+        var passed = handler.CallCount == 1 && requestOk && parsed?.Dialogue == generated.Dialogue
+            && metric.NetworkCallCount == 1 && metric.SuccessfulCallCount == 1
+            && metric.FailedCallCount == 0 && metric.SuccessRatePercent == 100
+            && metric.AverageLatencyMs is >= 0 && metric.MaximumLatencyMs is >= 0
+            && metric.FallbackCount == 0;
         return new TestResult("OpenAI HTTP 계약", expected,
-            passed ? expected : "request-or-response-mismatch", $"HTTP 호출 {handler.CallCount}회", passed,
+            passed ? expected : "request-or-response-mismatch",
+            $"HTTP 호출 {handler.CallCount}회/측정 성공 {metric.SuccessfulCallCount}회", passed,
             passed ? null : "Responses API 요청 스키마 또는 output_text 추출이 계약과 다릅니다.");
     }
     catch (Exception error)
     {
         return new TestResult("OpenAI HTTP 계약", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunDialogueContextContinuityAsync(MockGameContent content)
+{
+    const string expected = "2턴에 누적 요약/직전 플레이어 발화/직전 NPC 답변 전달";
+    try
+    {
+        var provider = new StubDialogueProvider("openai", StubProviderBehavior.Success);
+        await using var fixture = await GameFixture.CreateAsync(content, provider);
+        var start = await fixture.Service.StartSessionAsync("live");
+        const string firstPlayerText = "주민 안전과 비용을 함께 검토해 줘.";
+        await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, firstPlayerText, NewKey()));
+        await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, "그 내용을 바탕으로 우선순위를 말해 줘.", NewKey()));
+
+        var secondContext = provider.Requests.ElementAtOrDefault(1)?.ConversationContext;
+        var latestEvent = await fixture.Database.GameEvents
+            .Where(gameEvent => gameEvent.SessionId == start.SessionId && gameEvent.EventType == "DialogueGenerated")
+            .OrderByDescending(gameEvent => gameEvent.Sequence)
+            .FirstAsync();
+        using var eventDocument = JsonDocument.Parse(latestEvent.PayloadJson);
+        var eventStoresContext = eventDocument.RootElement.TryGetProperty("playerText", out _)
+            && eventDocument.RootElement.TryGetProperty("conversationSummary", out _);
+        var passed = provider.Requests.Count == 2
+            && secondContext?.Summary == "Live 응답 요약"
+            && secondContext.PreviousPlayerText == firstPlayerText
+            && secondContext.PreviousNpcDialogue == "고정 계약을 지킨 Live 대사입니다."
+            && eventStoresContext;
+        return new TestResult("대화 문맥 연속성", expected, passed ? expected : "context-mismatch",
+            $"Provider 요청 {provider.Requests.Count}회/이벤트 문맥 저장 {eventStoresContext}", passed,
+            passed ? null : "두 번째 대화 요청에 저장된 직전 턴 문맥이 전달되지 않았습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("대화 문맥 연속성", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static TestResult RunLiveApiMetricsAggregation()
+{
+    const string expected = "호출 2/성공 1/실패 1/성공률 50%/평균 200ms/최대 300ms/fallback 1";
+    try
+    {
+        var metrics = new LiveApiMetrics();
+        metrics.RecordProviderRequest(LiveApiOperation.Dialogue);
+        metrics.RecordNetworkCall(LiveApiOperation.Dialogue, TimeSpan.FromMilliseconds(100), true);
+        metrics.RecordNetworkCall(LiveApiOperation.Dialogue, TimeSpan.FromMilliseconds(300), false);
+        metrics.RecordFallback(LiveApiOperation.Dialogue);
+        var snapshot = metrics.Snapshot();
+        var dialogue = snapshot.Dialogue;
+        var career = snapshot.CareerEnding;
+        var passed = dialogue.ProviderRequestCount == 1 && dialogue.NetworkCallCount == 2
+            && dialogue.SuccessfulCallCount == 1 && dialogue.FailedCallCount == 1
+            && dialogue.SuccessRatePercent == 50 && dialogue.AverageLatencyMs == 200
+            && dialogue.MaximumLatencyMs == 300 && dialogue.FallbackCount == 1
+            && snapshot.Overall.NetworkCallCount == 2 && snapshot.Overall.SuccessRatePercent == 50
+            && career.NetworkCallCount == 0 && career.SuccessRatePercent is null
+            && career.AverageLatencyMs is null && career.MaximumLatencyMs is null;
+        var actual = $"호출 {dialogue.NetworkCallCount}/성공 {dialogue.SuccessfulCallCount}/실패 {dialogue.FailedCallCount}"
+            + $"/성공률 {dialogue.SuccessRatePercent}%/평균 {dialogue.AverageLatencyMs}ms"
+            + $"/최대 {dialogue.MaximumLatencyMs}ms/fallback {dialogue.FallbackCount}";
+        return new TestResult("Live API 측정치 집계", expected, actual, "전체/대화/직업 분리", passed,
+            passed ? null : "호출·성공·실패·지연·폴백 집계가 예상과 다릅니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("Live API 측정치 집계", expected, error.GetType().Name, "-", false, error.Message);
     }
 }
 
@@ -308,17 +395,23 @@ static async Task<TestResult> RunOpenAiQuotaFallbackAsync(MockGameContent conten
         var handler = new CapturingHttpHandler((_, _) => JsonResponse(HttpStatusCode.TooManyRequests,
             new { error = new { code = "credit_balance_exhausted", message = "quota" } }));
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.openai.com/v1/") };
+        var metrics = new LiveApiMetrics();
         var provider = new OpenAiDialogueProvider(client, Options.Create(new OpenAiOptions
         {
             ApiKey = "test-placeholder", Model = "test-model", TimeoutSeconds = 2
-        }));
-        await using var fixture = await GameFixture.CreateAsync(content, provider);
+        }), metrics);
+        await using var fixture = await GameFixture.CreateAsync(content, provider, liveApiMetrics: metrics);
         var start = await fixture.Service.StartSessionAsync("live");
         var response = await fixture.Service.SubmitDialogueAsync(start.SessionId,
             new DialogueRequest(start.Scene.NpcId, "계획을 계속한다.", NewKey()));
         var actual = $"{response.ResponseSource}/시도 {response.AttemptCount}";
-        var passed = actual == expected && response.FallbackUsed && handler.CallCount == 1;
-        return new TestResult("OpenAI 영구 한도 오류", expected, actual, $"HTTP 호출 {handler.CallCount}회", passed,
+        var metric = metrics.Snapshot().Dialogue;
+        var passed = actual == expected && response.FallbackUsed && handler.CallCount == 1
+            && metric.ProviderRequestCount == 1 && metric.NetworkCallCount == 1
+            && metric.SuccessfulCallCount == 0 && metric.FailedCallCount == 1
+            && metric.SuccessRatePercent == 0 && metric.FallbackCount == 1;
+        return new TestResult("OpenAI 영구 한도 오류", expected, actual,
+            $"HTTP 호출 {handler.CallCount}회/측정 실패 {metric.FailedCallCount}회/fallback {metric.FallbackCount}회", passed,
             passed ? null : "결제·사용량 한도 오류를 불필요하게 재시도했습니다.");
     }
     catch (Exception error)
@@ -369,7 +462,7 @@ static async Task<TestResult> RunMockCareerCandidateSelectionAsync()
         var facts = new CareerEndingFacts("구국의 기사단장", "칭호", "스스로 살아남은 영지", "self_saved",
             "legendary", "prestige", [new CareerAffinityResponse("martial", 30, "전투 지휘")],
             ["기사단을 이끌어 균열을 막았다.", "주민 대피로를 끝까지 지켰다."], ["용기", "지도력"]);
-        var service = new CareerEndingGenerationService([new MockCareerEndingProvider()]);
+        var service = new CareerEndingGenerationService([new MockCareerEndingProvider()], new LiveApiMetrics());
         var generated = await service.GenerateAsync("mock", facts);
         var evidenceCount = facts.CareerEvidence.Count(evidence =>
             generated.Content.Epilogue.Contains(evidence.TrimEnd('.'), StringComparison.Ordinal));
@@ -409,10 +502,11 @@ static async Task<TestResult> RunOpenAiCareerEndingHttpContractAsync(MockGameCon
                 { new { type = "output_text", text = JsonSerializer.Serialize(generated, new JsonSerializerOptions(JsonSerializerDefaults.Web)) } } } }
         }));
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.openai.com/v1/") };
+        var metrics = new LiveApiMetrics();
         var provider = new OpenAiCareerEndingProvider(client, Options.Create(new OpenAiOptions
         {
             ApiKey = "test-placeholder", Model = "test-model", TimeoutSeconds = 2, MaxOutputTokens = 300
-        }));
+        }), metrics);
         var raw = await provider.GenerateAsync(new CareerEndingProviderRequest(facts, 1));
         var parsed = JsonSerializer.Deserialize<GeneratedCareerEndingCandidates>(raw,
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -429,10 +523,16 @@ static async Task<TestResult> RunOpenAiCareerEndingHttpContractAsync(MockGameCon
             && factsOk
             && !handler.RequestBody.Contains("maxLength")
             && handler.AuthorizationScheme == "Bearer" && handler.RequestUri?.AbsolutePath == "/v1/responses";
+        var metric = metrics.Snapshot().CareerEnding;
         var passed = handler.CallCount == 1 && requestOk && parsed?.Candidates.Count == 3
-            && parsed.Candidates[0].OccupationName == generated.Candidates[0].OccupationName;
+            && parsed.Candidates[0].OccupationName == generated.Candidates[0].OccupationName
+            && metric.NetworkCallCount == 1 && metric.SuccessfulCallCount == 1
+            && metric.FailedCallCount == 0 && metric.SuccessRatePercent == 100
+            && metric.AverageLatencyMs is >= 0 && metric.MaximumLatencyMs is >= 0
+            && metric.FallbackCount == 0;
         return new TestResult("OpenAI 직업 후일담 HTTP 계약", expected,
-            passed ? expected : "request-or-response-mismatch", $"HTTP 호출 {handler.CallCount}회", passed,
+            passed ? expected : "request-or-response-mismatch",
+            $"HTTP 호출 {handler.CallCount}회/측정 성공 {metric.SuccessfulCallCount}회", passed,
             passed ? null : "후일담 Responses API 요청 스키마 또는 output_text 추출이 계약과 다릅니다.");
     }
     catch (Exception error)
@@ -597,7 +697,7 @@ sealed class GameFixture : IAsyncDisposable
     }
 
     public static async Task<GameFixture> CreateAsync(MockGameContent content, IDialogueProvider? liveProvider = null,
-        ICareerEndingProvider? liveEndingProvider = null)
+        ICareerEndingProvider? liveEndingProvider = null, LiveApiMetrics? liveApiMetrics = null)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -606,10 +706,11 @@ sealed class GameFixture : IAsyncDisposable
         await database.Database.EnsureCreatedAsync();
         var providers = new List<IDialogueProvider> { new MockDialogueProvider() };
         if (liveProvider is not null) providers.Add(liveProvider);
-        var dialogueGeneration = new DialogueGenerationService(providers, NpcPersonaCatalog.Load());
+        var metrics = liveApiMetrics ?? new LiveApiMetrics();
+        var dialogueGeneration = new DialogueGenerationService(providers, NpcPersonaCatalog.Load(), metrics);
         var endingProviders = new List<ICareerEndingProvider> { new MockCareerEndingProvider() };
         if (liveEndingProvider is not null) endingProviders.Add(liveEndingProvider);
-        var careerEndingGeneration = new CareerEndingGenerationService(endingProviders);
+        var careerEndingGeneration = new CareerEndingGenerationService(endingProviders, metrics);
         return new GameFixture(connection, database,
             new MockGameService(database, content, dialogueGeneration, careerEndingGeneration));
     }
@@ -621,7 +722,7 @@ sealed class GameFixture : IAsyncDisposable
     }
 }
 
-enum StubProviderBehavior { Success, TransientThenSuccess, PermanentFailure }
+enum StubProviderBehavior { Success, TransientThenSuccess, PermanentFailure, NullCareerFeedback }
 
 sealed class StubDialogueProvider(string providerId, StubProviderBehavior behavior) : IDialogueProvider
 {
@@ -629,15 +730,18 @@ sealed class StubDialogueProvider(string providerId, StubProviderBehavior behavi
     public string ProviderId { get; } = providerId;
     public int MaximumAttempts => 2;
     public StubProviderBehavior Behavior { get; } = behavior;
+    public List<DialogueProviderRequest> Requests { get; } = [];
 
     public Task<string> GenerateAsync(DialogueProviderRequest request, CancellationToken cancellationToken = default)
     {
+        Requests.Add(request);
         if (Behavior == StubProviderBehavior.TransientThenSuccess && request.Attempt == 1)
             throw new DialogueProviderException("temporary", true);
         if (Behavior == StubProviderBehavior.PermanentFailure)
             throw new DialogueProviderException("configuration", false);
+        var careerFeedback = Behavior == StubProviderBehavior.NullCareerFeedback ? null : "대화 성향 근거를 남겼다.";
         var generated = new GeneratedDialogue("고정 계약을 지킨 Live 대사입니다.", "determined",
-            "Live Provider 응답을 검증했다.", ["kind"], "대화 성향 근거를 남겼다.", "Live 응답 요약");
+            "Live Provider 응답을 검증했다.", ["kind"], careerFeedback, "Live 응답 요약");
         return Task.FromResult(JsonSerializer.Serialize(generated, JsonOptions));
     }
 }

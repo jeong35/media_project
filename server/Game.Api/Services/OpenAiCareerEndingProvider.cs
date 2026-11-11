@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
 namespace Game.Api.Services;
 
-public sealed class OpenAiCareerEndingProvider(HttpClient httpClient, IOptions<OpenAiOptions> options) : ICareerEndingProvider
+public sealed class OpenAiCareerEndingProvider(HttpClient httpClient, IOptions<OpenAiOptions> options,
+    LiveApiMetrics liveApiMetrics) : ICareerEndingProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly OpenAiOptions settings = options.Value;
@@ -24,25 +26,36 @@ public sealed class OpenAiCareerEndingProvider(HttpClient httpClient, IOptions<O
         message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
         message.Content = JsonContent.Create(BuildRequest(request.Facts), options: JsonOptions);
 
-        HttpResponseMessage response;
+        var stopwatch = Stopwatch.StartNew();
         try
         {
-            response = await httpClient.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-        }
-        catch (OperationCanceledException error) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new CareerEndingProviderException("OpenAI request timed out.", true, innerException: error);
-        }
-        catch (HttpRequestException error)
-        {
-            throw new CareerEndingProviderException("OpenAI request could not be completed.", true, innerException: error);
-        }
+            HttpResponseMessage response;
+            try
+            {
+                response = await httpClient.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            }
+            catch (OperationCanceledException error) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new CareerEndingProviderException("OpenAI request timed out.", true, innerException: error);
+            }
+            catch (HttpRequestException error)
+            {
+                throw new CareerEndingProviderException("OpenAI request could not be completed.", true, innerException: error);
+            }
 
-        using (response)
+            using (response)
+            {
+                var responseJson = await response.Content.ReadAsStringAsync(timeout.Token);
+                if (!response.IsSuccessStatusCode) throw CreateHttpError(response, responseJson);
+                var output = ExtractOutputText(responseJson);
+                liveApiMetrics.RecordNetworkCall(LiveApiOperation.CareerEnding, stopwatch.Elapsed, true);
+                return output;
+            }
+        }
+        catch
         {
-            var responseJson = await response.Content.ReadAsStringAsync(timeout.Token);
-            if (!response.IsSuccessStatusCode) throw CreateHttpError(response, responseJson);
-            return ExtractOutputText(responseJson);
+            liveApiMetrics.RecordNetworkCall(LiveApiOperation.CareerEnding, stopwatch.Elapsed, false);
+            throw;
         }
     }
 

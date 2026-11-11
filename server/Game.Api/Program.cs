@@ -10,6 +10,7 @@ builder.Services.AddDbContext<GameDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("GameDb") ?? "Data Source=game.db"));
 builder.Services.AddSingleton(MockContentLoader.Load());
 builder.Services.AddSingleton(NpcPersonaCatalog.Load());
+builder.Services.AddSingleton<LiveApiMetrics>();
 builder.Services.AddSingleton<MockDialogueProvider>();
 builder.Services.AddSingleton<IDialogueProvider>(services => services.GetRequiredService<MockDialogueProvider>());
 builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("OpenAI"));
@@ -47,6 +48,7 @@ using (var scope = app.Services.CreateScope())
 
 app.MapGet("/health", async (GameDbContext database) => Results.Ok(new HealthResponse(
     "ok", "game-api", "0.2.0", await database.Database.CanConnectAsync())));
+app.MapGet("/api/v1/diagnostics/live-api", (LiveApiMetrics metrics) => Results.Ok(metrics.Snapshot()));
 app.MapPost("/api/v1/sessions", async (SessionStartRequest request, MockGameService game) =>
     Results.Ok(await game.StartSessionAsync(request.Mode, request.FailureScenario)));
 app.MapGet("/api/v1/sessions/{sessionId:guid}", async (Guid sessionId, MockGameService game) =>
