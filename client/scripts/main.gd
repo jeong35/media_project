@@ -89,6 +89,7 @@ var current_act := 1
 var current_npc_id := ""
 var current_background_id := ""
 var request_kind := ""
+var decision_bridge_generated := false
 var choice_ids: Array[String] = []
 var removed_obstacles := 0
 var correct_seeds := 0
@@ -119,7 +120,7 @@ func _ready() -> void:
 	new_game_button.pressed.connect(_start_new_game)
 	continue_button.pressed.connect(_continue_game)
 	send_button.pressed.connect(_submit_dialogue)
-	next_choices_button.pressed.connect(_fetch_choices)
+	next_choices_button.pressed.connect(_on_next_choices_pressed)
 	restart_button.pressed.connect(_start_new_game)
 	for index in choice_buttons.size():
 		choice_buttons[index].pressed.connect(_submit_choice.bind(index))
@@ -221,6 +222,23 @@ func _submit_dialogue() -> void:
 	})
 
 
+func _on_next_choices_pressed() -> void:
+	if decision_bridge_generated:
+		_fetch_choices()
+	else:
+		_request_decision_bridge()
+
+
+func _request_decision_bridge() -> void:
+	next_choices_button.disabled = true
+	send_button.disabled = true
+	player_input.editable = false
+	feedback.text = "지금까지의 대화를 정리하고 있습니다…"
+	_request_json("decision_bridge", HTTPClient.METHOD_POST, "/api/v1/sessions/%s/decision-bridge" % session_id, {
+		"idempotencyKey": _new_uuid()
+	})
+
+
 func _fetch_choices() -> void:
 	next_choices_button.disabled = true
 	_request_json("choices", HTTPClient.METHOD_GET, "/api/v1/sessions/%s/choices" % session_id)
@@ -292,6 +310,7 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		"start": _show_session(payload)
 		"resume": _show_resume(payload)
 		"dialogue": _show_dialogue(payload)
+		"decision_bridge": _show_decision_bridge(payload)
 		"choices": _show_choices(payload)
 		"choice": _show_choice_result(payload)
 		"farming": _show_farming_result(payload)
@@ -321,6 +340,7 @@ func _show_resume(payload: Dictionary) -> void:
 		npc_dialogue.text = payload.get("currentDialogue", "")
 		player_input.hide()
 		send_button.hide()
+		decision_bridge_generated = true
 		_fetch_choices()
 		return
 	if phase == "AwaitingFarming" and payload.get("nextActivity") is Dictionary:
@@ -345,7 +365,7 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 	scene_id_label.text = _translate_background(current_background_id)
 	_update_scene_art(current_background_id, current_npc_id, opening_emotion)
 	npc_dialogue.text = payload.get("openingDialogue", "")
-	player_input.placeholder_text = "%s에게 답하세요. (최대 300자)" % npc_name.text
+	player_input.placeholder_text = _dialogue_placeholder(current_act, npc_name.text)
 	feedback.text = transition_feedback
 	player_input.text = ""
 	player_input.show()
@@ -353,6 +373,8 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 	choices.hide()
 	choice_margin.hide()
 	dialogue_margin.show()
+	decision_bridge_generated = false
+	next_choices_button.text = "결정하기"
 	next_choices_button.hide()
 	next_choices_button.disabled = false
 	title_screen.hide()
@@ -383,29 +405,59 @@ func _show_dialogue(payload: Dictionary) -> void:
 	_update_character_art(current_npc_id, response_emotion)
 	var fallback_note := "\n대화 생성에 실패해 준비된 대사를 사용했습니다." if payload.get("fallbackUsed", false) else ""
 	var remaining := int(payload.get("dialogueRemaining", 0))
-	var choices_available := bool(payload.get("choicesAvailable", true))
+	var choices_available := bool(payload.get("choicesAvailable", false))
 	feedback.text = "%s\n%s%s" % [payload.get("feedback", ""), payload.get("careerFeedback", ""), fallback_note]
-	if choices_available:
-		player_input.hide()
-		send_button.hide()
-		next_choices_button.show()
-		if smoke_test:
-			_fetch_choices()
-	else:
-		player_input.text = ""
-		player_input.placeholder_text = "%s에게 한 번 더 말하거나 질문하세요. (남은 대화 %d회)" % [npc_name.text, remaining]
-		player_input.show()
-		player_input.editable = true
-		send_button.show()
-		send_button.disabled = false
-		next_choices_button.hide()
-		if smoke_test:
+	decision_bridge_generated = false
+	next_choices_button.text = "결정하기"
+	next_choices_button.visible = choices_available
+	next_choices_button.disabled = false
+	player_input.text = ""
+	player_input.placeholder_text = _dialogue_placeholder(current_act, npc_name.text)
+	player_input.visible = remaining > 0
+	player_input.editable = remaining > 0
+	send_button.visible = remaining > 0
+	send_button.disabled = remaining <= 0
+	if remaining <= 0:
+		feedback.text += "\n이 장면에서 나눌 수 있는 자유 대화를 모두 사용했습니다. 결정하기를 눌러 주세요."
+	if smoke_test:
+		if choices_available:
+			_request_decision_bridge()
+		else:
 			match current_act:
 				1: player_input.text = "그럼 비용과 위험도를 비교해서 가장 급한 일부터 정하자."
 				2: player_input.text = "확실한 사실과 가설을 나눠서 다시 설명해줘."
 				3: player_input.text = "주민들이 당장 가장 부족한 게 뭔지 알려줘."
 				_: player_input.text = "지금까지 준비한 것 중 가장 확실한 것부터 확인하자."
 			_submit_dialogue()
+
+
+func _show_decision_bridge(payload: Dictionary) -> void:
+	npc_dialogue.text = payload.get("dialogue", "")
+	var response_emotion := str(payload.get("emotion", "neutral"))
+	npc_emotion.text = _translate_emotion(response_emotion)
+	_update_character_art(current_npc_id, response_emotion)
+	var fallback_note := "\n전환 대사 생성에 실패해 준비된 대사를 사용했습니다." if payload.get("fallbackUsed", false) else ""
+	feedback.text = "지금까지의 대화를 바탕으로 결정 단계로 이어집니다.%s" % fallback_note
+	player_input.hide()
+	send_button.hide()
+	decision_bridge_generated = true
+	next_choices_button.text = "선택지 보기"
+	next_choices_button.disabled = false
+	next_choices_button.show()
+	if smoke_test:
+		_fetch_choices()
+
+
+func _dialogue_placeholder(act: int, name: String) -> String:
+	match act:
+		1:
+			return "자유롭게 이야기해 보세요. 예: 여기가 어디야? / 가장 급한 문제는? / 너는 누구야?"
+		2:
+			return "리아에게 궁금한 점을 물어보거나 의견을 말해 보세요. 예: 결계가 왜 위험해? / 다른 방법은 없어?"
+		3:
+			return "마르타와 자유롭게 이야기해 보세요. 예: 주민들은 요즘 어때? / 마력보리가 뭐야? / 그냥 아무 말도 괜찮아요."
+		_:
+			return "%s에게 마지막으로 확인하고 싶은 점이나 판단 기준을 말해 보세요." % name
 
 
 func _show_choices(payload: Dictionary) -> void:
