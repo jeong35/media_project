@@ -36,6 +36,7 @@ foreach (var scenario in scenarios)
 results.Add(await RunTimeoutGuardAsync(content));
 results.Add(await RunIdempotencyAsync(content));
 results.Add(await RunDecisionBridgeGuardAsync(content));
+results.Add(await RunStoryBeatContractAsync(content));
 results.Add(RunLegacyEndingCompatibility());
 results.Add(await RunDialogueFailureScenarioAsync(content, "transient_once", false, "mock"));
 results.Add(await RunDialogueFailureScenarioAsync(content, "invalid_payload", true, "fixed_fallback"));
@@ -192,7 +193,8 @@ static async Task<TestResult> RunDecisionBridgeGuardAsync(MockGameContent conten
             new DialogueRequest(start.Scene.NpcId, "그럼 지금 가장 급한 문제는 뭐지?", NewKey()));
         var bridge = await fixture.Service.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
         var snapshot = await fixture.Service.GetSessionAsync(start.SessionId);
-        var passed = blocked && bridge.ChoicesAvailable && snapshot.Phase == "AwaitingChoice";
+        var passed = blocked && bridge.ChoicesAvailable && !bridge.FallbackUsed
+            && bridge.ResponseSource == "mock" && snapshot.Phase == "AwaitingChoice";
         return new TestResult("결정 전환 최소 대화 검증", expected,
             passed ? expected : "전환 규칙 불일치", snapshot.Phase, passed,
             passed ? null : "최소 대화 수 또는 전환 상태 검증에 실패했습니다.");
@@ -200,6 +202,34 @@ static async Task<TestResult> RunDecisionBridgeGuardAsync(MockGameContent conten
     catch (Exception error)
     {
         return new TestResult("결정 전환 최소 대화 검증", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunStoryBeatContractAsync(MockGameContent content)
+{
+    const string expected = "프롤로그/균열 전조/7일 후 최종 명령";
+    try
+    {
+        await using var fixture = await GameFixture.CreateAsync(content);
+        var start = await fixture.Service.StartSessionAsync("mock");
+        var act1Beats = start.Scene.StoryBeats ?? [];
+        var act4 = content.GetAct(4);
+        var act4Beats = act4.StoryBeats ?? [];
+        var finaleBeats = act4.FinaleBeats ?? [];
+        var passed = act1Beats.Count >= 8
+            && act1Beats.Any(beat => beat.BackgroundId == "modern_library")
+            && act1Beats.Any(beat => beat.Text.Contains("3년 뒤"))
+            && act4Beats.Any(beat => beat.Text.Contains("7일 뒤"))
+            && finaleBeats.Any(beat => beat.BackgroundId == "cracked_sky_castle_wall")
+            && finaleBeats.Any(beat => beat.Text.Contains("최종 명령"));
+        var actual = passed ? expected : $"Act1 {act1Beats.Count}/Act4 {act4Beats.Count}/Finale {finaleBeats.Count}";
+        return new TestResult("확정 스토리 비트 계약", expected, actual,
+            $"도입 {act1Beats.Count}개/전조 {act4Beats.Count}개/최종 {finaleBeats.Count}개", passed,
+            passed ? null : "프롤로그, 균열 전조 또는 최종 명령 장면이 API 콘텐츠에서 누락됐습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("확정 스토리 비트 계약", expected, error.GetType().Name, "-", false, error.Message);
     }
 }
 

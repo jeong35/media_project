@@ -2,7 +2,7 @@
   "act": 4,
   "timeLabel": "균열 발생 7일 전 → 발생 당일",
   "scene": {
-    "backgroundId": "cracked_sky_castle_wall",
+    "backgroundId": "study_night",
     "npcId": "steward_edwin",
     "npcName": "에드윈",
     "npcEmotion": "urgent",
@@ -288,6 +288,114 @@
       }
     }
   },
+  "storyBeats": [
+    {
+      "kind": "narration",
+      "speaker": "내레이션",
+      "text": "농사를 마치려던 순간, 땅이 낮게 울리고 공동밭 위의 공기가 흔들렸다.",
+      "backgroundId": "community_barley_field",
+      "npcId": "mage_lia",
+      "npcName": "리아",
+      "emotion": "determined"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "리아",
+      "text": "영주님! 예상보다 빨라졌어요.",
+      "backgroundId": "community_barley_field",
+      "npcId": "mage_lia",
+      "npcName": "리아",
+      "emotion": "determined"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "주인공",
+      "text": "얼마나?",
+      "backgroundId": "community_barley_field",
+      "npcId": "mage_lia",
+      "npcName": "리아",
+      "emotion": "determined"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "리아",
+      "text": "현재 결계 상태라면…… 대규모 균열은 7일 뒤예요.",
+      "backgroundId": "community_barley_field",
+      "npcId": "mage_lia",
+      "npcName": "리아",
+      "emotion": "determined"
+    },
+    {
+      "kind": "thought",
+      "speaker": "주인공 속마음",
+      "text": "원작에서는 아직 2년 가까이 남아 있어야 한다.\n\n미래를 안다고 해서 정답지를 가진 건 아니었구나.",
+      "backgroundId": "community_barley_field",
+      "npcId": "mage_lia",
+      "npcName": "리아",
+      "emotion": "determined"
+    },
+    {
+      "kind": "card",
+      "speaker": "시간",
+      "text": "균열 발생까지 7일",
+      "backgroundId": "study_night",
+      "hideCharacter": true
+    },
+    {
+      "kind": "narration",
+      "speaker": "내레이션",
+      "text": "집무실에 에드윈, 리아, 마르타의 보고가 모였다. 병력과 결계, 비축량과 대피로를 마지막으로 점검할 시간이었다.",
+      "backgroundId": "study_night",
+      "npcId": "steward_edwin",
+      "npcName": "에드윈",
+      "emotion": "urgent"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "에드윈",
+      "text": "현재 상태라면 균열은 7일 뒤입니다.\n\n리아는 결계가 버틸 시간을 계산했고, 마르타는 주민 대피와 비축량을 정리했습니다.\n\n저는 병력과 자금을 확인했습니다.\n\n최종 명령 전에 무엇을 가장 중요하게 볼지 확인하겠습니다.",
+      "backgroundId": "study_night",
+      "npcId": "steward_edwin",
+      "npcName": "에드윈",
+      "emotion": "urgent"
+    }
+  ],
+  "finaleBeats": [
+    {
+      "kind": "card",
+      "speaker": "시간",
+      "text": "7일 후 — 균열 발생 당일",
+      "backgroundId": "cracked_sky_castle_wall",
+      "hideCharacter": true
+    },
+    {
+      "kind": "narration",
+      "speaker": "내레이션",
+      "text": "지금까지 선택한 준비가 성벽과 결계탑, 대피로 위에서 실제 행동으로 이어졌다.\n\n붉은 하늘이 갈라지며 영지 전체를 흔들었다.",
+      "backgroundId": "cracked_sky_castle_wall",
+      "npcId": "steward_edwin",
+      "npcName": "에드윈",
+      "emotion": "urgent"
+    },
+    {
+      "kind": "thought",
+      "speaker": "주인공 속마음",
+      "text": "내가 선택해서 시작한 준비다. 지금 와서 방치하면 더 위험해진다.\n\n정답은 모르지만, 결정은 해야 한다.",
+      "backgroundId": "cracked_sky_castle_wall",
+      "npcId": "steward_edwin",
+      "npcName": "에드윈",
+      "emotion": "urgent"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "에드윈",
+      "text": "영주님.\n\n균열이 열립니다.\n\n최종 명령을.",
+      "backgroundId": "cracked_sky_castle_wall",
+      "npcId": "steward_edwin",
+      "npcName": "에드윈",
+      "emotion": "urgent"
+    }
+  ],
   "dialogueMinTurns": 1,
   "dialogueMaxTurns": 3,
   "decisionBridgeDialogue": "알겠습니다. 말씀하신 기준으로 위험을 다시 정리해 두겠습니다. 지금부터 7일 동안 각자 맡은 준비를 끝내고, 균열이 열리는 순간 최종 명령을 받겠습니다.",

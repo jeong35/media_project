@@ -44,7 +44,7 @@ public sealed class MockDialogueProvider : IDialogueProvider
 
         if (request.DecisionBridge)
             return Task.FromResult(JsonSerializer.Serialize(new GeneratedDialogue(request.Act.DecisionBridgeDialogue,
-                request.Act.DecisionBridgeEmotion, "대화를 바탕으로 결정 단계로 넘어갑니다.", [], "",
+                request.Act.DecisionBridgeEmotion, "대화를 바탕으로 결정 단계로 넘어갑니다.", [], null,
                 "결정 단계로 전환했다."), JsonOptions));
 
         var dialogue = request.Act.MockDialogue;
@@ -137,7 +137,7 @@ public sealed class DialogueGenerationService(IEnumerable<IDialogueProvider> pro
     {
         if (decisionBridge)
             return new DialogueGenerationResult(new GeneratedDialogue(act.DecisionBridgeDialogue, act.DecisionBridgeEmotion,
-                "대화를 바탕으로 결정 단계로 넘어갑니다.", [], "", "결정 단계로 전환했다."),
+                "대화를 바탕으로 결정 단계로 넘어갑니다.", [], null, "결정 단계로 전환했다."),
                 "fixed_fallback", true, attemptCount);
 
         var fallback = act.MockDialogue;

@@ -30,6 +30,27 @@ offset_bottom = 5.0
 grow_horizontal = 2
 color = Color(0.56, 0.42, 0.19, 1)
 
+[node name="PageBackgroundImage" type="TextureRect" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="PageBackgroundShade" type="ColorRect" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.015, 0.02, 0.035, 0.48)
+
 [node name="Page" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -68,13 +89,15 @@ layout_mode = 2
 text = "Live API 사용 (실제 호출 비용 발생)"
 
 [node name="NewGameButton" type="Button" parent="Page/TitleScreen"]
-custom_minimum_size = Vector2(0, 64)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
+size_flags_horizontal = 4
 text = "새 게임"
 
 [node name="ContinueButton" type="Button" parent="Page/TitleScreen"]
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
+size_flags_horizontal = 4
 disabled = true
 text = "이어하기 · 저장된 세션 없음"
 
@@ -218,6 +241,7 @@ autowrap_mode = 2
 [node name="FinishButton" type="Button" parent="Page/FarmingScreen"]
 custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
+size_flags_horizontal = 4
 text = "농사 결과 확인"
 
 [node name="FinalChoiceScreen" type="VBoxContainer" parent="Page"]
@@ -263,18 +287,22 @@ theme_override_constants/separation = 7
 [node name="Choice0" type="Button" parent="Page/FinalChoiceScreen/Choices"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
+size_flags_horizontal = 4
 
 [node name="Choice1" type="Button" parent="Page/FinalChoiceScreen/Choices"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
+size_flags_horizontal = 4
 
 [node name="Choice2" type="Button" parent="Page/FinalChoiceScreen/Choices"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
+size_flags_horizontal = 4
 
 [node name="Choice3" type="Button" parent="Page/FinalChoiceScreen/Choices"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
+size_flags_horizontal = 4
 
 [node name="Feedback" type="Label" parent="Page/FinalChoiceScreen"]
 layout_mode = 2
@@ -344,8 +372,9 @@ horizontal_alignment = 1
 autowrap_mode = 2
 
 [node name="RestartButton" type="Button" parent="Page/EndingScreen/Content"]
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
+size_flags_horizontal = 4
 text = "다시 시작"
 
 [node name="GameScreen" type="Control" parent="."]
@@ -420,10 +449,10 @@ autowrap_mode = 2
 [node name="CharacterImage" type="TextureRect" parent="GameScreen"]
 layout_mode = 1
 anchors_preset = 3
-anchor_left = 0.48
-anchor_top = 0.08
-anchor_right = 0.96
-anchor_bottom = 0.73
+anchor_left = 0.25
+anchor_top = 0.02
+anchor_right = 0.75
+anchor_bottom = 0.75
 grow_horizontal = 0
 grow_vertical = 2
 expand_mode = 1
@@ -459,12 +488,13 @@ text = "NPC 이미지 영역"
 horizontal_alignment = 1
 
 [node name="DialogueMargin" type="MarginContainer" parent="GameScreen"]
+clip_contents = true
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -218.0
+offset_top = -300.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_override_constants/margin_left = 38
@@ -473,56 +503,120 @@ theme_override_constants/margin_right = 38
 theme_override_constants/margin_bottom = 26
 
 [node name="DialogueBox" type="PanelContainer" parent="GameScreen/DialogueMargin"]
+custom_minimum_size = Vector2(0, 264)
 layout_mode = 2
 
 [node name="Content" type="VBoxContainer" parent="GameScreen/DialogueMargin/DialogueBox"]
 layout_mode = 2
-theme_override_constants/separation = 7
+theme_override_constants/separation = 2
 
 [node name="NameRow" type="HBoxContainer" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
 theme_override_constants/separation = 12
 
 [node name="NpcName" type="Label" parent="GameScreen/DialogueMargin/DialogueBox/Content/NameRow"]
+custom_minimum_size = Vector2(270, 64)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.92, 0.76, 0.4, 1)
-theme_override_font_sizes/font_size = 22
+theme_type_variation = &"NamePlate"
 text = "에드윈"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="Emotion" type="Label" parent="GameScreen/DialogueMargin/DialogueBox/Content/NameRow"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.58, 0.68, 0.8, 1)
 text = "차분함"
-vertical_alignment = 2
+vertical_alignment = 1
 
 [node name="NpcDialogue" type="Label" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
+theme_override_constants/line_spacing = -3
 text = "대사"
+horizontal_alignment = 0
 autowrap_mode = 2
+vertical_alignment = 0
 
 [node name="PlayerInput" type="TextEdit" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
-custom_minimum_size = Vector2(0, 58)
+custom_minimum_size = Vector2(0, 54)
 layout_mode = 2
 placeholder_text = "에드윈에게 답하세요. (최대 300자)"
 wrap_mode = 1
 
-[node name="SendButton" type="Button" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+[node name="Feedback" type="Label" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.76, 0.91, 0.79, 1)
+text = ""
+autowrap_mode = 2
+max_lines_visible = 2
+
+[node name="ActionRow" type="HBoxContainer" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 2
+
+[node name="SendButton" type="Button" parent="GameScreen/DialogueMargin/DialogueBox/Content/ActionRow"]
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "대답하기"
 
-[node name="Feedback" type="Label" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.62, 0.78, 0.68, 1)
-text = ""
-autowrap_mode = 2
-
-[node name="NextChoicesButton" type="Button" parent="GameScreen/DialogueMargin/DialogueBox/Content"]
+[node name="NextChoicesButton" type="Button" parent="GameScreen/DialogueMargin/DialogueBox/Content/ActionRow"]
 visible = false
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "결정하기"
+
+[node name="StoryMargin" type="MarginContainer" parent="GameScreen"]
+visible = false
+clip_contents = true
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -300.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/margin_left = 38
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 38
+theme_override_constants/margin_bottom = 26
+
+[node name="StoryBox" type="PanelContainer" parent="GameScreen/StoryMargin"]
+custom_minimum_size = Vector2(0, 264)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="GameScreen/StoryMargin/StoryBox"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Speaker" type="Label" parent="GameScreen/StoryMargin/StoryBox/Content"]
+custom_minimum_size = Vector2(290, 64)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_type_variation = &"NamePlate"
+text = "내레이션"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Text" type="Label" parent="GameScreen/StoryMargin/StoryBox/Content"]
+custom_minimum_size = Vector2(0, 128)
+layout_mode = 2
+theme_override_constants/line_spacing = -3
+theme_override_font_sizes/font_size = 18
+text = "스토리 본문"
+horizontal_alignment = 0
+autowrap_mode = 2
+vertical_alignment = 0
+
+[node name="ContinueButton" type="Button" parent="GameScreen/StoryMargin/StoryBox/Content"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 8
+text = "계속"
 
 [node name="ChoiceMargin" type="MarginContainer" parent="GameScreen"]
 visible = false
@@ -559,14 +653,17 @@ theme_override_constants/separation = 6
 [node name="Choice0" type="Button" parent="GameScreen/ChoiceMargin/ChoiceBox/Content/Choices"]
 custom_minimum_size = Vector2(0, 39)
 layout_mode = 2
+size_flags_horizontal = 4
 
 [node name="Choice1" type="Button" parent="GameScreen/ChoiceMargin/ChoiceBox/Content/Choices"]
 custom_minimum_size = Vector2(0, 39)
 layout_mode = 2
+size_flags_horizontal = 4
 
 [node name="Choice2" type="Button" parent="GameScreen/ChoiceMargin/ChoiceBox/Content/Choices"]
 custom_minimum_size = Vector2(0, 39)
 layout_mode = 2
+size_flags_horizontal = 4
 
 [node name="HealthRequest" type="HTTPRequest" parent="."]
 timeout = 40.0

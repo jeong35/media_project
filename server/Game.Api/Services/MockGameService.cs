@@ -43,7 +43,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         await database.SaveChangesAsync();
 
         return new SessionStartResponse(session.Id, 1, act.TimeLabel,
-            ToSceneResponse(act.Scene), act.Scene.OpeningDialogue, act.DialogueMaxTurns, false);
+            ToSceneResponse(act.Scene, act.StoryBeats), act.Scene.OpeningDialogue, act.DialogueMaxTurns, false);
     }
 
     public async Task<SessionSnapshotResponse> GetSessionAsync(Guid sessionId)
@@ -61,7 +61,7 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var dialogueRemaining = Math.Max(0, act.DialogueMaxTurns - session.CurrentTurn);
         var choicesAvailable = session.CurrentTurn >= act.DialogueMinTurns;
         return new SessionSnapshotResponse(session.Id, session.Status, session.CurrentAct, session.CurrentTurn, session.Phase,
-            ToStateResponse(session), ending, act.TimeLabel, ToSceneResponse(act.Scene), act.Scene.OpeningDialogue,
+            ToStateResponse(session), ending, act.TimeLabel, ToSceneResponse(act.Scene, act.StoryBeats), act.Scene.OpeningDialogue,
             currentDialogue, nextActivity, farmingProgress, dialogueRemaining, choicesAvailable);
     }
 
@@ -128,7 +128,8 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var generated = await dialogueGeneration.GenerateDecisionBridgeAsync(GetProviderId(session.Mode), act,
             GetFailureScenario(session.Mode), TraitIds, conversationContext);
         var response = new DecisionBridgeResponse(generated.Content.Dialogue, generated.Content.Emotion, true,
-            generated.ResponseSource, generated.FallbackUsed, generated.AttemptCount);
+            generated.ResponseSource, generated.FallbackUsed, generated.AttemptCount,
+            ToStoryBeatResponses(act.FinaleBeats));
 
         session.Phase = "AwaitingChoice";
         session.UpdatedAt = DateTimeOffset.UtcNow;
@@ -214,7 +215,9 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             session.Phase = "AwaitingDialogue";
             if (!await database.NpcStates.AnyAsync(state => state.SessionId == sessionId && state.NpcId == nextContent.Scene.NpcId))
                 database.NpcStates.Add(new NpcState { SessionId = sessionId, NpcId = nextContent.Scene.NpcId, Trust = 20 });
-            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, nextContent.DialogueMaxTurns, false);
+            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel,
+                ToSceneResponse(nextContent.Scene, nextContent.StoryBeats), nextContent.Scene.OpeningDialogue,
+                nextContent.DialogueMaxTurns, false);
         }
 
         var response = new ChoiceResultResponse(choice.ResultNarration, choice.Feedback, choice.Changes, ToStateResponse(session), nextAct, nextActivity, ending);
@@ -269,7 +272,9 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             session.Phase = "AwaitingDialogue";
             if (!await database.NpcStates.AnyAsync(state => state.SessionId == sessionId && state.NpcId == nextContent.Scene.NpcId))
                 database.NpcStates.Add(new NpcState { SessionId = sessionId, NpcId = nextContent.Scene.NpcId, Trust = 20 });
-            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel, ToSceneResponse(nextContent.Scene), nextContent.Scene.OpeningDialogue, nextContent.DialogueMaxTurns, false);
+            nextAct = new NextActResponse(nextContent.Act, nextContent.TimeLabel,
+                ToSceneResponse(nextContent.Scene, nextContent.StoryBeats), nextContent.Scene.OpeningDialogue,
+                nextContent.DialogueMaxTurns, false);
         }
         var response = new FarmingResultResponse(score, string.Join(" ", feedbackParts), changes, ToStateResponse(session), nextAct, ending);
 
@@ -367,8 +372,13 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         return timer;
     }
 
-    private static SceneResponse ToSceneResponse(SceneContent scene) =>
-        new(scene.BackgroundId, scene.NpcId, scene.NpcName, scene.NpcEmotion, scene.Narration);
+    private static SceneResponse ToSceneResponse(SceneContent scene, IReadOnlyList<StoryBeatContent>? storyBeats = null) =>
+        new(scene.BackgroundId, scene.NpcId, scene.NpcName, scene.NpcEmotion, scene.Narration,
+            ToStoryBeatResponses(storyBeats));
+
+    private static IReadOnlyList<StoryBeatResponse> ToStoryBeatResponses(IReadOnlyList<StoryBeatContent>? storyBeats) =>
+        (storyBeats ?? []).Select(beat => new StoryBeatResponse(beat.Kind, beat.Speaker, beat.Text,
+            beat.BackgroundId, beat.NpcId, beat.NpcName, beat.Emotion, beat.HideCharacter)).ToArray();
 
     private static GameEvent CreateEvent(Guid sessionId, int sequence, string eventType, object payload, string? key = null) =>
         CreateEvent(sessionId, sequence, eventType, 1, payload, key);

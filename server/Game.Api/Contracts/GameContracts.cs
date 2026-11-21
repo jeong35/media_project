@@ -2,7 +2,10 @@ namespace Game.Api.Contracts;
 
 public sealed record HealthResponse(string Status, string Service, string Version, bool DatabaseReady);
 public sealed record SessionStartRequest(string Mode = "mock", string FailureScenario = "none");
-public sealed record SceneResponse(string BackgroundId, string NpcId, string NpcName, string NpcEmotion, string Narration);
+public sealed record StoryBeatResponse(string Kind, string Speaker, string Text, string BackgroundId,
+    string NpcId, string NpcName, string Emotion, bool HideCharacter);
+public sealed record SceneResponse(string BackgroundId, string NpcId, string NpcName, string NpcEmotion, string Narration,
+    IReadOnlyList<StoryBeatResponse>? StoryBeats = null);
 public sealed record SessionStartResponse(Guid SessionId, int Act, string TimeLabel, SceneResponse Scene, string OpeningDialogue,
     int DialogueRemaining, bool ChoicesAvailable = false);
 public sealed record DialogueRequest(string NpcId, string Text, string IdempotencyKey);
@@ -11,7 +14,8 @@ public sealed record DialogueResponse(string Dialogue, string Emotion, string Fe
     bool FallbackUsed = false, int AttemptCount = 1);
 public sealed record DecisionBridgeRequest(string IdempotencyKey);
 public sealed record DecisionBridgeResponse(string Dialogue, string Emotion, bool ChoicesAvailable = true,
-    string ResponseSource = "mock", bool FallbackUsed = false, int AttemptCount = 1);
+    string ResponseSource = "mock", bool FallbackUsed = false, int AttemptCount = 1,
+    IReadOnlyList<StoryBeatResponse>? StoryBeats = null);
 public sealed record ChoiceOptionResponse(string ChoiceId, string Label);
 public sealed record ChoicesResponse(IReadOnlyList<ChoiceOptionResponse> Choices, int? TimeLimitSeconds = null,
     string? TimeoutChoiceId = null, double? RemainingSeconds = null);

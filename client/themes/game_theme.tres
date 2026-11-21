@@ -1,74 +1,89 @@
-[gd_resource type="Theme" load_steps=9 format=3]
+[gd_resource type="Theme" load_steps=14 format=3]
 
-[sub_resource type="StyleBoxFlat" id="StylePanel"]
-bg_color = Color(0.075, 0.09, 0.125, 0.96)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.28, 0.36, 0.48, 0.75)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
+[ext_resource type="Texture2D" path="res://assets/ui/dialogue_panel.png" id="1_dialogue_panel"]
+[ext_resource type="Texture2D" path="res://assets/ui/name_plate.png" id="2_name_plate"]
+[ext_resource type="Texture2D" path="res://assets/ui/basic_button.png" id="3_basic_button"]
+
+[sub_resource type="StyleBoxTexture" id="StylePanel"]
+texture = ExtResource("1_dialogue_panel")
+draw_center = true
+texture_margin_left = 38.0
+texture_margin_top = 28.0
+texture_margin_right = 38.0
+texture_margin_bottom = 28.0
+region_rect = Rect2(0, 0, 1200, 348)
+content_margin_left = 26.0
+content_margin_top = 12.0
+content_margin_right = 26.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="StyleNamePlate"]
+texture = ExtResource("2_name_plate")
+draw_center = true
+texture_margin_left = 24.0
+texture_margin_top = 18.0
+texture_margin_right = 24.0
+texture_margin_bottom = 18.0
+region_rect = Rect2(0, 0, 520, 136)
+content_margin_left = 32.0
+content_margin_top = 5.0
+content_margin_right = 32.0
+content_margin_bottom = 5.0
+
+[sub_resource type="StyleBoxTexture" id="StyleButton"]
+texture = ExtResource("3_basic_button")
+draw_center = true
+texture_margin_left = 14.0
+texture_margin_top = 10.0
+texture_margin_right = 14.0
+texture_margin_bottom = 10.0
+region_rect = Rect2(0, 0, 600, 130)
 content_margin_left = 18.0
-content_margin_top = 14.0
+content_margin_top = 5.0
 content_margin_right = 18.0
-content_margin_bottom = 14.0
+content_margin_bottom = 5.0
 
-[sub_resource type="StyleBoxFlat" id="StyleButton"]
-bg_color = Color(0.12, 0.16, 0.23, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.31, 0.42, 0.57, 1)
-corner_radius_top_left = 7
-corner_radius_top_right = 7
-corner_radius_bottom_right = 7
-corner_radius_bottom_left = 7
+[sub_resource type="StyleBoxTexture" id="StyleButtonHover"]
+texture = ExtResource("3_basic_button")
+draw_center = true
+texture_margin_left = 14.0
+texture_margin_top = 10.0
+texture_margin_right = 14.0
+texture_margin_bottom = 10.0
+region_rect = Rect2(0, 0, 600, 130)
+modulate_color = Color(1, 0.94, 0.8, 1)
 content_margin_left = 18.0
+content_margin_top = 5.0
 content_margin_right = 18.0
+content_margin_bottom = 5.0
 
-[sub_resource type="StyleBoxFlat" id="StyleButtonHover"]
-bg_color = Color(0.19, 0.27, 0.39, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.54, 0.7, 0.88, 1)
-corner_radius_top_left = 7
-corner_radius_top_right = 7
-corner_radius_bottom_right = 7
-corner_radius_bottom_left = 7
+[sub_resource type="StyleBoxTexture" id="StyleButtonPressed"]
+texture = ExtResource("3_basic_button")
+draw_center = true
+texture_margin_left = 14.0
+texture_margin_top = 10.0
+texture_margin_right = 14.0
+texture_margin_bottom = 10.0
+region_rect = Rect2(0, 0, 600, 130)
+modulate_color = Color(0.78, 0.66, 0.5, 1)
 content_margin_left = 18.0
+content_margin_top = 5.0
 content_margin_right = 18.0
+content_margin_bottom = 5.0
 
-[sub_resource type="StyleBoxFlat" id="StyleButtonPressed"]
-bg_color = Color(0.37, 0.28, 0.14, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.88, 0.7, 0.36, 1)
-corner_radius_top_left = 7
-corner_radius_top_right = 7
-corner_radius_bottom_right = 7
-corner_radius_bottom_left = 7
+[sub_resource type="StyleBoxTexture" id="StyleButtonDisabled"]
+texture = ExtResource("3_basic_button")
+draw_center = true
+texture_margin_left = 14.0
+texture_margin_top = 10.0
+texture_margin_right = 14.0
+texture_margin_bottom = 10.0
+region_rect = Rect2(0, 0, 600, 130)
+modulate_color = Color(0.46, 0.43, 0.4, 0.72)
 content_margin_left = 18.0
+content_margin_top = 5.0
 content_margin_right = 18.0
-
-[sub_resource type="StyleBoxFlat" id="StyleButtonDisabled"]
-bg_color = Color(0.09, 0.1, 0.13, 0.85)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.2, 0.23, 0.28, 0.8)
-corner_radius_top_left = 7
-corner_radius_top_right = 7
-corner_radius_bottom_right = 7
-corner_radius_bottom_left = 7
+content_margin_bottom = 5.0
 
 [sub_resource type="StyleBoxFlat" id="StyleTextEdit"]
 bg_color = Color(0.045, 0.055, 0.078, 0.96)
@@ -86,6 +101,8 @@ content_margin_top = 10.0
 content_margin_right = 12.0
 content_margin_bottom = 10.0
 
+[sub_resource type="StyleBoxEmpty" id="StyleCheckButton"]
+
 [sub_resource type="StyleBoxFlat" id="StyleProgressBackground"]
 bg_color = Color(0.04, 0.05, 0.07, 1)
 corner_radius_top_left = 5
@@ -102,19 +119,34 @@ corner_radius_bottom_left = 5
 
 [resource]
 default_font_size = 16
-Button/colors/font_color = Color(0.9, 0.92, 0.96, 1)
-Button/colors/font_disabled_color = Color(0.42, 0.45, 0.5, 1)
-Button/colors/font_hover_color = Color(1, 1, 1, 1)
-Button/colors/font_pressed_color = Color(1, 0.93, 0.76, 1)
+Button/colors/font_color = Color(0.2, 0.12, 0.08, 1)
+Button/colors/font_disabled_color = Color(0.33, 0.29, 0.27, 0.8)
+Button/colors/font_hover_color = Color(0.14, 0.075, 0.04, 1)
+Button/colors/font_pressed_color = Color(0.12, 0.065, 0.035, 1)
 Button/font_sizes/font_size = 16
 Button/styles/disabled = SubResource("StyleButtonDisabled")
 Button/styles/hover = SubResource("StyleButtonHover")
 Button/styles/normal = SubResource("StyleButton")
 Button/styles/pressed = SubResource("StyleButtonPressed")
+CheckButton/colors/font_color = Color(0.88, 0.9, 0.94, 1)
+CheckButton/colors/font_hover_color = Color(1, 1, 1, 1)
+CheckButton/colors/font_pressed_color = Color(1, 1, 1, 1)
+CheckButton/styles/disabled = SubResource("StyleCheckButton")
+CheckButton/styles/hover = SubResource("StyleCheckButton")
+CheckButton/styles/normal = SubResource("StyleCheckButton")
+CheckButton/styles/pressed = SubResource("StyleCheckButton")
 Label/colors/font_color = Color(0.88, 0.9, 0.94, 1)
+NamePlate/base_type = &"Label"
+NamePlate/colors/font_color = Color(0.22, 0.12, 0.08, 1)
+NamePlate/font_sizes/font_size = 20
+NamePlate/styles/normal = SubResource("StyleNamePlate")
 PanelContainer/styles/panel = SubResource("StylePanel")
 ProgressBar/styles/background = SubResource("StyleProgressBackground")
 ProgressBar/styles/fill = SubResource("StyleProgressFill")
-TextEdit/colors/font_color = Color(0.9, 0.92, 0.96, 1)
-TextEdit/colors/font_placeholder_color = Color(0.47, 0.52, 0.61, 1)
-TextEdit/styles/normal = SubResource("StyleTextEdit")
+TextEdit/colors/caret_color = Color(0.2, 0.12, 0.08, 1)
+TextEdit/colors/font_color = Color(0.2, 0.12, 0.08, 1)
+TextEdit/colors/font_placeholder_color = Color(0.42, 0.31, 0.24, 0.82)
+TextEdit/colors/selection_color = Color(0.66, 0.48, 0.3, 0.42)
+TextEdit/styles/focus = SubResource("StyleButtonHover")
+TextEdit/styles/normal = SubResource("StyleButton")
+TextEdit/styles/read_only = SubResource("StyleButtonDisabled")

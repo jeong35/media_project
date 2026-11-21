@@ -2,7 +2,7 @@
   "act": 2,
   "timeLabel": "멸망 2년 8개월 전",
   "scene": {
-    "backgroundId": "north_beacon_ruins",
+    "backgroundId": "mage_tower_interior",
     "npcId": "mage_lia",
     "npcName": "리아",
     "npcEmotion": "nervous",
@@ -72,6 +72,44 @@
       "flags": [
         "alliance_plan_selected"
       ]
+    }
+  ],
+  "storyBeats": [
+    {
+      "kind": "narration",
+      "speaker": "내레이션",
+      "text": "첫 조치를 내린 뒤, 북부 결계탑의 결계핵이 다시 불규칙하게 흔들리기 시작했다.\n\n그 앞에는 수십 장의 계산식을 든 견습 마법사 리아가 서 있었다.",
+      "backgroundId": "mage_tower_interior",
+      "npcId": "mage_lia",
+      "npcName": "리아",
+      "emotion": "nervous"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "리아",
+      "text": "결계핵 하나만 바꾸면 끝나는 문제가 아니에요.\n\n북부 탑이 멈추면 다른 두 탑에도 부담이 몰려요.\n\n그런데…… 어디서부터 설명해야 할지 모르겠어서.",
+      "backgroundId": "mage_tower_interior",
+      "npcId": "mage_lia",
+      "npcName": "리아",
+      "emotion": "nervous"
+    },
+    {
+      "kind": "thought",
+      "speaker": "주인공 속마음",
+      "text": "자료는 제일 많이 조사했는데 발표만 시작하면 말을 못 하는 팀원 타입이네.",
+      "backgroundId": "mage_tower_interior",
+      "npcId": "mage_lia",
+      "npcName": "리아",
+      "emotion": "nervous"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "주인공",
+      "text": "천천히 해도 돼.\n\n내가 모르는 건 물어볼게.",
+      "backgroundId": "mage_tower_interior",
+      "npcId": "mage_lia",
+      "npcName": "리아",
+      "emotion": "nervous"
     }
   ],
   "dialogueMinTurns": 2,

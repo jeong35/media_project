@@ -5,6 +5,8 @@ const SESSION_FILE := "user://last_session.cfg"
 const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 
 @onready var title_screen: VBoxContainer = $Page/TitleScreen
+@onready var page_background_image: TextureRect = $PageBackgroundImage
+@onready var page_background_shade: ColorRect = $PageBackgroundShade
 @onready var live_mode_toggle: CheckButton = $Page/TitleScreen/LiveModeToggle
 @onready var new_game_button: Button = $Page/TitleScreen/NewGameButton
 @onready var continue_button: Button = $Page/TitleScreen/ContinueButton
@@ -22,10 +24,14 @@ const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 @onready var npc_initial: Label = $GameScreen/CharacterPlaceholder/Content/Initial
 @onready var npc_emotion: Label = $GameScreen/DialogueMargin/DialogueBox/Content/NameRow/Emotion
 @onready var player_input: TextEdit = $GameScreen/DialogueMargin/DialogueBox/Content/PlayerInput
-@onready var send_button: Button = $GameScreen/DialogueMargin/DialogueBox/Content/SendButton
+@onready var send_button: Button = $GameScreen/DialogueMargin/DialogueBox/Content/ActionRow/SendButton
 @onready var feedback: Label = $GameScreen/DialogueMargin/DialogueBox/Content/Feedback
 @onready var dialogue_margin: MarginContainer = $GameScreen/DialogueMargin
-@onready var next_choices_button: Button = $GameScreen/DialogueMargin/DialogueBox/Content/NextChoicesButton
+@onready var next_choices_button: Button = $GameScreen/DialogueMargin/DialogueBox/Content/ActionRow/NextChoicesButton
+@onready var story_margin: MarginContainer = $GameScreen/StoryMargin
+@onready var story_speaker: Label = $GameScreen/StoryMargin/StoryBox/Content/Speaker
+@onready var story_text: Label = $GameScreen/StoryMargin/StoryBox/Content/Text
+@onready var story_continue_button: Button = $GameScreen/StoryMargin/StoryBox/Content/ContinueButton
 @onready var choice_margin: MarginContainer = $GameScreen/ChoiceMargin
 @onready var choices: VBoxContainer = $GameScreen/ChoiceMargin/ChoiceBox/Content/Choices
 @onready var choice_buttons: Array[Button] = [
@@ -89,8 +95,15 @@ var session_id := ""
 var current_act := 1
 var current_npc_id := ""
 var current_background_id := ""
+var current_opening_emotion := "neutral"
 var request_kind := ""
 var decision_bridge_generated := false
+var story_beats: Array = []
+var story_index := -1
+var story_completion := ""
+var story_begin_auto_advance := false
+var pending_finale_beats: Array = []
+var finale_narration_override := ""
 var choice_ids: Array[String] = []
 var removed_obstacles := 0
 var correct_seeds := 0
@@ -121,8 +134,10 @@ func _ready() -> void:
 	new_game_button.pressed.connect(_start_new_game)
 	continue_button.pressed.connect(_continue_game)
 	live_mode_toggle.toggled.connect(_on_live_mode_toggled)
+	player_input.gui_input.connect(_on_player_input_gui_input)
 	send_button.pressed.connect(_submit_dialogue)
 	next_choices_button.pressed.connect(_on_next_choices_pressed)
+	story_continue_button.pressed.connect(_advance_story)
 	restart_button.pressed.connect(_start_new_game)
 	for index in choice_buttons.size():
 		choice_buttons[index].pressed.connect(_submit_choice.bind(index))
@@ -178,12 +193,17 @@ func _start_new_game() -> void:
 	var failure_scenario := mock_failure_scenario if provider_mode == "mock" else "none"
 	session_id = ""
 	choice_ids.clear()
+	pending_finale_beats.clear()
+	finale_narration_override = ""
+	story_beats.clear()
+	story_margin.hide()
 	feedback.text = ""
 	player_input.text = ""
 	player_input.show()
 	send_button.show()
 	choices.hide()
 	title_screen.show()
+	_hide_page_background()
 	game_screen.hide()
 	farming_screen.hide()
 	final_choice_screen.hide()
@@ -217,6 +237,19 @@ func _on_live_mode_toggled(enabled: bool) -> void:
 	connection_status.text = "Live API 모드 · 실제 호출 비용이 발생합니다." if enabled else "Mock 모드 · 로컬 서버 필요"
 
 
+func _on_player_input_gui_input(event: InputEvent) -> void:
+	if not event is InputEventKey:
+		return
+	var key_event := event as InputEventKey
+	if not key_event.pressed or key_event.echo or key_event.shift_pressed:
+		return
+	if key_event.keycode not in [KEY_ENTER, KEY_KP_ENTER]:
+		return
+	player_input.accept_event()
+	if player_input.editable and not send_button.disabled:
+		_submit_dialogue()
+
+
 func _submit_dialogue() -> void:
 	var text := player_input.text.strip_edges()
 	if text.is_empty():
@@ -234,7 +267,13 @@ func _submit_dialogue() -> void:
 
 func _on_next_choices_pressed() -> void:
 	if decision_bridge_generated:
-		_fetch_choices()
+		if not pending_finale_beats.is_empty():
+			var finale_beats := pending_finale_beats.duplicate(true)
+			pending_finale_beats.clear()
+			finale_narration_override = _story_summary(finale_beats)
+			_play_story_beats(finale_beats, "fetch_choices")
+		else:
+			_fetch_choices()
 	else:
 		_request_decision_bridge()
 
@@ -375,10 +414,10 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 	narration.text = scene.get("narration", "")
 	npc_name.text = scene.get("npcName", "")
 	npc_initial.text = npc_name.text.left(1) if not npc_name.text.is_empty() else "?"
-	var opening_emotion := str(scene.get("npcEmotion", "neutral"))
-	npc_emotion.text = _translate_emotion(opening_emotion)
+	current_opening_emotion = str(scene.get("npcEmotion", "neutral"))
+	npc_emotion.text = _translate_emotion(current_opening_emotion)
 	scene_id_label.text = _translate_background(current_background_id)
-	_update_scene_art(current_background_id, current_npc_id, opening_emotion)
+	_update_scene_art(current_background_id, current_npc_id, current_opening_emotion)
 	npc_dialogue.text = payload.get("openingDialogue", "")
 	player_input.placeholder_text = _dialogue_placeholder(current_act, npc_name.text)
 	feedback.text = transition_feedback
@@ -392,17 +431,31 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 	choices.hide()
 	choice_margin.hide()
 	dialogue_margin.show()
+	story_margin.hide()
 	decision_bridge_generated = false
+	pending_finale_beats.clear()
 	next_choices_button.text = "결정하기"
 	next_choices_button.visible = choices_available
 	next_choices_button.disabled = false
 	title_screen.hide()
+	_hide_page_background()
 	farming_screen.hide()
 	final_choice_screen.hide()
 	ending_screen.hide()
 	game_screen.show()
 	new_game_button.disabled = false
 	continue_button.disabled = false
+	var intro_beats: Array = scene.get("storyBeats", [])
+	if auto_advance and not intro_beats.is_empty():
+		story_begin_auto_advance = true
+		_play_story_beats(intro_beats, "begin_act")
+		return
+	_begin_act_interaction(auto_advance)
+
+
+func _begin_act_interaction(auto_advance: bool) -> void:
+	dialogue_margin.show()
+	story_margin.hide()
 	if smoke_save_dialogue_test:
 		print("MOCK_SESSION_SAVE_DIALOGUE_READY: %s" % session_id)
 		get_tree().quit()
@@ -413,6 +466,80 @@ func _show_act(payload: Dictionary, transition_feedback := "", auto_advance := t
 			2: player_input.text = "징후를 먼저 계산하고 실행할 수 있는 계획을 세우자."
 			_: player_input.text = "주민들의 오늘을 지키는 일도 직접 돕겠다."
 		_submit_dialogue()
+
+
+func _play_story_beats(beats: Array, completion: String) -> void:
+	story_beats = beats.duplicate(true)
+	story_index = -1
+	story_completion = completion
+	dialogue_margin.hide()
+	choice_margin.hide()
+	story_margin.show()
+	_advance_story()
+
+
+func _advance_story() -> void:
+	story_index += 1
+	if story_index >= story_beats.size():
+		_finish_story_sequence()
+		return
+	var beat: Dictionary = story_beats[story_index]
+	story_speaker.text = str(beat.get("speaker", "내레이션"))
+	story_text.text = str(beat.get("text", ""))
+	var kind := str(beat.get("kind", "narration"))
+	story_speaker.add_theme_color_override("font_color", Color("3f2116") if kind == "dialogue" else Color("413047") if kind == "thought" else Color("3a3028"))
+	story_continue_button.text = "시작하기" if story_index == story_beats.size() - 1 and story_completion == "begin_act" else "계속"
+	var beat_background := str(beat.get("backgroundId", ""))
+	var displayed_background := current_background_id if beat_background.is_empty() else beat_background
+	var beat_npc_id := str(beat.get("npcId", ""))
+	var beat_npc_name := str(beat.get("npcName", ""))
+	var beat_emotion := str(beat.get("emotion", "neutral"))
+	if bool(beat.get("hideCharacter", false)):
+		_update_scene_art(displayed_background, current_npc_id, current_opening_emotion)
+		character_image.hide()
+		character_placeholder.hide()
+	elif not beat_npc_id.is_empty():
+		_update_scene_art(displayed_background, beat_npc_id, beat_emotion)
+		npc_initial.text = beat_npc_name.left(1) if not beat_npc_name.is_empty() else "?"
+	else:
+		_update_scene_art(displayed_background, current_npc_id, current_opening_emotion)
+	if smoke_test:
+		call_deferred("_advance_story")
+
+
+func _finish_story_sequence() -> void:
+	var completion := story_completion
+	story_beats.clear()
+	story_index = -1
+	story_completion = ""
+	story_margin.hide()
+	_restore_current_scene_art()
+	if completion == "begin_act":
+		var auto_advance := story_begin_auto_advance
+		story_begin_auto_advance = false
+		_begin_act_interaction(auto_advance)
+	elif completion == "fetch_choices":
+		_fetch_choices()
+
+
+func _restore_current_scene_art() -> void:
+	scene_id_label.text = _translate_background(current_background_id)
+	npc_initial.text = npc_name.text.left(1) if not npc_name.text.is_empty() else "?"
+	npc_emotion.text = _translate_emotion(current_opening_emotion)
+	_update_scene_art(current_background_id, current_npc_id, current_opening_emotion)
+
+
+func _story_summary(beats: Array) -> String:
+	var lines := PackedStringArray()
+	for value in beats:
+		var beat: Dictionary = value
+		var kind := str(beat.get("kind", "narration"))
+		if kind not in ["card", "narration", "dialogue"]:
+			continue
+		var speaker := str(beat.get("speaker", ""))
+		var text := str(beat.get("text", ""))
+		lines.append(text if kind in ["card", "narration"] else "%s: %s" % [speaker, text])
+	return "\n\n".join(lines)
 
 
 func _show_dialogue(payload: Dictionary) -> void:
@@ -466,11 +593,12 @@ func _show_decision_bridge(payload: Dictionary) -> void:
 	player_input.hide()
 	send_button.hide()
 	decision_bridge_generated = true
+	pending_finale_beats = payload.get("storyBeats", []).duplicate(true)
 	next_choices_button.text = "선택지 보기"
 	next_choices_button.disabled = false
 	next_choices_button.show()
 	if smoke_test:
-		_fetch_choices()
+		_on_next_choices_pressed()
 
 
 func _dialogue_placeholder(act: int, name: String) -> String:
@@ -518,9 +646,11 @@ func _show_final_choices(server_choices: Array, time_limit: int, automatic_choic
 	game_screen.hide()
 	farming_screen.hide()
 	ending_screen.hide()
+	_show_page_background("cracked_sky_castle_wall")
 	final_choice_screen.show()
 	final_act_label.text = act_label.text
-	final_narration.text = "%s\n\n%s: %s" % [narration.text, npc_name.text, npc_dialogue.text]
+	final_narration.text = finale_narration_override if not finale_narration_override.is_empty() else \
+		"%s\n\n%s: %s" % [narration.text, npc_name.text, npc_dialogue.text]
 	final_feedback.text = "20초 안에 최종 대응을 선택하세요. 서버 응답을 기다리는 동안에는 시간이 흐르지 않습니다."
 	timeout_choice_id = automatic_choice_id
 	for index in final_choice_buttons.size():
@@ -564,6 +694,7 @@ func _show_choice_result(payload: Dictionary) -> void:
 func _show_farming(payload: Dictionary, transition_feedback: String, saved_progress: Dictionary = {}) -> void:
 	game_screen.hide()
 	ending_screen.hide()
+	_show_page_background("community_barley_field")
 	farming_screen.show()
 	farming_title.text = payload.get("title", "마력보리 공동밭")
 	farming_instructions.text = payload.get("instructions", "")
@@ -739,6 +870,7 @@ func _show_farming_result(payload: Dictionary) -> void:
 
 
 func _show_ending(payload: Dictionary) -> void:
+	_hide_page_background()
 	var ending: Dictionary = payload.get("ending", {})
 	var ending_records: Array = ending.get("records", [])
 	occupation.text = ending.get("occupationName", "")
@@ -803,8 +935,9 @@ func _translate_emotion(emotion_id: String) -> String:
 
 func _translate_background(background_id: String) -> String:
 	return {
+		"modern_library": "발표 전날 도서관",
 		"study_night": "밤의 영주 집무실",
-		"north_beacon_ruins": "북부 결계탑 유적",
+		"mage_tower_interior": "리아의 마탑 연구실",
 		"community_barley_field": "마력보리 공동밭",
 		"cracked_sky_castle_wall": "균열 아래 성벽"
 	}.get(background_id, background_id.replace("_", " "))
@@ -820,6 +953,22 @@ func _update_scene_art(background_id: String, npc_id: String, emotion_id: String
 		background_image.hide()
 	background_fallback.color = _background_fallback_color(background_id)
 	_update_character_art(npc_id, emotion_id)
+
+
+func _show_page_background(background_id: String) -> void:
+	var background_path := "res://assets/backgrounds/%s.png" % background_id
+	if ResourceLoader.exists(background_path):
+		page_background_image.texture = load(background_path)
+		page_background_image.show()
+		page_background_shade.show()
+	else:
+		_hide_page_background()
+
+
+func _hide_page_background() -> void:
+	page_background_image.texture = null
+	page_background_image.hide()
+	page_background_shade.hide()
 
 
 func _update_character_art(npc_id: String, emotion_id: String) -> void:
@@ -839,8 +988,9 @@ func _update_character_art(npc_id: String, emotion_id: String) -> void:
 
 func _background_fallback_color(background_id: String) -> Color:
 	return {
+		"modern_library": Color("1b2233"),
 		"study_night": Color("152038"),
-		"north_beacon_ruins": Color("263544"),
+		"mage_tower_interior": Color("263544"),
 		"community_barley_field": Color("30452f"),
 		"cracked_sky_castle_wall": Color("462936")
 	}.get(background_id, Color("141b28"))

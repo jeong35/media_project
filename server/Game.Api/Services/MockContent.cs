@@ -14,9 +14,12 @@ public sealed record MockActContent(int Act, string TimeLabel, InitialStateConte
     int? ChoiceTimeLimitSeconds = null, string? TimeoutChoiceId = null, FinaleRulesContent? FinaleRules = null,
     int DialogueMinTurns = 2, int DialogueMaxTurns = 5,
     string DecisionBridgeDialogue = "좋습니다. 그럼 지금 결정해야 할 일을 정리하겠습니다.",
-    string DecisionBridgeEmotion = "neutral");
+    string DecisionBridgeEmotion = "neutral", IReadOnlyList<StoryBeatContent>? StoryBeats = null,
+    IReadOnlyList<StoryBeatContent>? FinaleBeats = null);
 public sealed record InitialStateContent(int Military, int Treasury, int Legitimacy, int Ward);
 public sealed record SceneContent(string BackgroundId, string NpcId, string NpcName, string NpcEmotion, string Narration, string OpeningDialogue);
+public sealed record StoryBeatContent(string Kind, string Speaker, string Text, string BackgroundId = "",
+    string NpcId = "", string NpcName = "", string Emotion = "", bool HideCharacter = false);
 public sealed record MockDialogueContent(string Dialogue, string Emotion, string Feedback, IReadOnlyList<string> AcceptedTags, string CareerFeedback, string Summary);
 public sealed record ChoiceContent(string ChoiceId, string Label, string ResultNarration, string Feedback,
     IReadOnlyDictionary<string, int> Changes, IReadOnlyDictionary<string, int> AffinityChanges, IReadOnlyList<string> Flags,
