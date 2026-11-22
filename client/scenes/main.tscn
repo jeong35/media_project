@@ -89,14 +89,14 @@ layout_mode = 2
 text = "Live API 사용 (실제 호출 비용 발생)"
 
 [node name="NewGameButton" type="Button" parent="Page/TitleScreen"]
-custom_minimum_size = Vector2(360, 64)
+custom_minimum_size = Vector2(300, 65)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_type_variation = &"OrnatePrimaryButton"
 text = "새 게임"
 
 [node name="ContinueButton" type="Button" parent="Page/TitleScreen"]
-custom_minimum_size = Vector2(360, 64)
+custom_minimum_size = Vector2(300, 65)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_type_variation = &"OrnatePrimaryButton"
@@ -514,6 +514,26 @@ theme_override_colors/font_color = Color(0.56, 0.64, 0.74, 1)
 theme_override_font_sizes/font_size = 13
 text = "NPC 이미지 영역"
 horizontal_alignment = 1
+
+[node name="StoryFadeOverlay" type="ColorRect" parent="GameScreen"]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0)
+
+[node name="StoryRedFlashOverlay" type="ColorRect" parent="GameScreen"]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.72, 0.05, 0.08, 0)
 
 [node name="DialogueMargin" type="MarginContainer" parent="GameScreen"]
 layout_mode = 1

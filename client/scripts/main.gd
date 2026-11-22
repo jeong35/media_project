@@ -3,30 +3,13 @@ extends Control
 const API_BASE := "http://127.0.0.1:5050"
 const SESSION_FILE := "user://last_session.cfg"
 const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
+const LOADING_CUES_PATH := "res://data/dialogue_loading_cues.json"
 const DIALOGUE_PAGE_CHARACTER_LIMIT := 120
 const PASSIVE_DIALOGUE_PAGE_CHARACTER_LIMIT := 240
 const STORY_PAGE_CHARACTER_LIMIT := 240
 const TYPEWRITER_CHARACTERS_PER_SECOND := 36.0
 const LOADING_CUE_DELAY_SECONDS := 0.65
 const LOADING_FOLLOWUP_DELAY_SECONDS := 5.0
-const NPC_LOADING_CUES := {
-	"steward_edwin": [
-		"(에드윈은 잠시 눈을 감고 가장 적절한 표현을 고르는 듯하다.)",
-		"\"흠… 영주님께 어디서부터 설명드려야 할지.\"",
-		"(에드윈은 한숨을 삼켰다. 이번에는 대체 무슨 생각을 하시는 걸까.)"
-	],
-	"mage_lia": [
-		"(리아는 대답하려다 입술을 달싹이고는 다시 고개를 숙였다.)",
-		"\"아, 그게… 잠시만요. 생각을 좀 정리하고…\"",
-		"(리아의 손끝에서 작은 마법의 불꽃이 피어올랐다가 사라진다.)"
-	],
-	"farmer_marta": [
-		"\"어머, 그건 말이지요… 어디 보자!\"",
-		"(마르타는 무언가 재미있는 이야기가 떠오른 듯 손뼉을 쳤다.)",
-		"\"아이고, 내가 또 말이 길어지겠네. 잠깐만 기다려 봐요!\""
-	]
-}
-
 @onready var title_screen: VBoxContainer = $Page/TitleScreen
 @onready var page_background_image: TextureRect = $PageBackgroundImage
 @onready var page_background_shade: ColorRect = $PageBackgroundShade
@@ -39,6 +22,8 @@ const NPC_LOADING_CUES := {
 @onready var background_image: TextureRect = $GameScreen/BackgroundImage
 @onready var character_image: TextureRect = $GameScreen/CharacterImage
 @onready var character_placeholder: PanelContainer = $GameScreen/CharacterPlaceholder
+@onready var story_fade_overlay: ColorRect = $GameScreen/StoryFadeOverlay
+@onready var story_red_flash_overlay: ColorRect = $GameScreen/StoryRedFlashOverlay
 @onready var act_label: Label = $GameScreen/SceneHeader/Content/ActLabel
 @onready var scene_id_label: Label = $GameScreen/SceneHeader/Content/SceneName
 @onready var narration: Label = $GameScreen/SceneHeader/Content/Narration
@@ -167,6 +152,8 @@ var smoke_dialogue_layout_test := false
 var smoke_passive_dialogue_layout_test := false
 var smoke_story_layout_test := false
 var smoke_loading_timing_test := false
+var smoke_button_assets_test := false
+var smoke_act1_opening_test := false
 var smoke_runs := 0
 var final_time_limit := 0.0
 var timeout_choice_id := ""
@@ -191,12 +178,17 @@ var typewriter_character_index := 0
 var typewriter_active := false
 var dialogue_request_in_flight := false
 var dialogue_request_context: Dictionary = {}
+var loading_cue_data: Dictionary = {}
 var loading_cue_indices: Dictionary = {}
+var loading_cue_selection_count := 0
+var last_loading_cue := ""
 var active_loading_cue := ""
 var loading_pulse_step := 0
+var last_story_background_id := ""
 
 
 func _ready() -> void:
+	_load_loading_cues()
 	typewriter_timer.wait_time = 1.0 / TYPEWRITER_CHARACTERS_PER_SECOND
 	loading_cue_timer.wait_time = LOADING_CUE_DELAY_SECONDS
 	loading_followup_timer.wait_time = LOADING_FOLLOWUP_DELAY_SECONDS
@@ -245,6 +237,8 @@ func _ready() -> void:
 	smoke_passive_dialogue_layout_test = "--smoke-passive-dialogue-layout" in arguments
 	smoke_story_layout_test = "--smoke-story-layout" in arguments
 	smoke_loading_timing_test = "--smoke-loading-timing" in arguments
+	smoke_button_assets_test = "--smoke-button-assets" in arguments
+	smoke_act1_opening_test = "--smoke-act1-opening" in arguments
 	smoke_resume_test = "--smoke-resume" in arguments or smoke_resume_timer_test
 	if "--smoke-dialogue-transient" in arguments:
 		mock_failure_scenario = "transient_once"
@@ -270,7 +264,13 @@ func _ready() -> void:
 	if smoke_loading_timing_test:
 		call_deferred("_run_loading_timing_smoke")
 		return
+	if smoke_button_assets_test:
+		call_deferred("_run_button_assets_smoke")
+		return
 	_load_saved_session_reference()
+	if smoke_act1_opening_test:
+		_start_new_game()
+		return
 	if smoke_resume_test:
 		_continue_game()
 	elif smoke_test:
@@ -583,6 +583,8 @@ func _show_act(payload: Dictionary, _transition_feedback := "", auto_advance := 
 	if auto_advance and not intro_beats.is_empty():
 		story_begin_auto_advance = true
 		_play_story_beats(intro_beats, "begin_act")
+		if smoke_act1_opening_test:
+			call_deferred("_run_act1_opening_smoke")
 		return
 	_begin_act_interaction(auto_advance)
 
@@ -610,6 +612,7 @@ func _play_story_beats(beats: Array, completion: String) -> void:
 	story_pages.clear()
 	story_page_index = -1
 	story_completion = completion
+	last_story_background_id = ""
 	dialogue_margin.hide()
 	choice_margin.hide()
 	story_margin.show()
@@ -629,12 +632,12 @@ func _advance_story() -> void:
 		_finish_story_sequence()
 		return
 	var beat: Dictionary = story_beats[story_index]
-	story_speaker.text = str(beat.get("speaker", "내레이션"))
+	var kind := str(beat.get("kind", "narration"))
+	story_speaker.text = _normalize_story_speaker(str(beat.get("speaker", "나")), kind)
 	var compact_story_text := str(beat.get("text", "")).replace("\n\n", "\n")
 	story_pages = _paginate_text(compact_story_text, STORY_PAGE_CHARACTER_LIMIT)
 	story_page_index = 0
 	story_text.text = story_pages[story_page_index]
-	var kind := str(beat.get("kind", "narration"))
 	story_speaker.add_theme_color_override("font_color", Color("3f2116") if kind == "dialogue" else Color("413047") if kind == "thought" else Color("3a3028"))
 	_update_story_continue_button()
 	var beat_background := str(beat.get("backgroundId", ""))
@@ -651,6 +654,8 @@ func _advance_story() -> void:
 		npc_initial.text = beat_npc_name.left(1) if not beat_npc_name.is_empty() else "?"
 	else:
 		_update_scene_art(displayed_background, current_npc_id, current_opening_emotion)
+	_play_story_visual_effect(last_story_background_id, displayed_background)
+	last_story_background_id = displayed_background
 	if smoke_test:
 		call_deferred("_advance_story")
 
@@ -662,6 +667,9 @@ func _finish_story_sequence() -> void:
 	story_pages.clear()
 	story_page_index = -1
 	story_completion = ""
+	last_story_background_id = ""
+	story_fade_overlay.color.a = 0.0
+	story_red_flash_overlay.color.a = 0.0
 	story_margin.hide()
 	_restore_current_scene_art()
 	if completion == "begin_act":
@@ -698,6 +706,27 @@ func _story_summary(beats: Array) -> String:
 		var text := str(beat.get("text", ""))
 		lines.append(text if kind in ["card", "narration"] else "%s: %s" % [speaker, text])
 	return "\n\n".join(lines)
+
+
+func _normalize_story_speaker(speaker: String, kind: String = "") -> String:
+	var normalized := speaker.strip_edges()
+	if normalized in ["내레이션", "주인공 속마음", "주인공", "기억", "기억 속", "나"]:
+		return "나"
+	if normalized.is_empty() and kind in ["narration", "thought", "card"]:
+		return "나"
+	return normalized
+
+
+func _play_story_visual_effect(previous_background: String, displayed_background: String) -> void:
+	if not previous_background.is_empty() and previous_background != displayed_background:
+		story_fade_overlay.color = Color(0.0, 0.0, 0.0, 0.82)
+		var fade_tween := create_tween()
+		fade_tween.tween_property(story_fade_overlay, "color:a", 0.0, 0.38)
+	if displayed_background == "cracked_sky_castle_wall" \
+		and previous_background != displayed_background:
+		story_red_flash_overlay.color = Color(0.72, 0.05, 0.08, 0.28)
+		var red_tween := create_tween()
+		red_tween.tween_property(story_red_flash_overlay, "color:a", 0.0, 0.55)
 
 
 func _fetch_dialogue_history() -> void:
@@ -946,11 +975,47 @@ func _stop_dialogue_loading() -> void:
 	loading_pulse_step = 0
 
 
+func _load_loading_cues() -> void:
+	if not FileAccess.file_exists(LOADING_CUES_PATH):
+		push_error("대기 연출 데이터 파일을 찾을 수 없습니다: %s" % LOADING_CUES_PATH)
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(LOADING_CUES_PATH))
+	if not parsed is Dictionary:
+		push_error("대기 연출 JSON을 읽을 수 없습니다: %s" % LOADING_CUES_PATH)
+		return
+	loading_cue_data = parsed
+
+
+func _next_cue_from_pool(pool_key: String, cues: Array) -> String:
+	if cues.is_empty():
+		return ""
+	var next_index := int(loading_cue_indices.get(pool_key, -1))
+	for _attempt in cues.size():
+		next_index = (next_index + 1) % cues.size()
+		var candidate := str(cues[next_index])
+		if candidate != last_loading_cue or cues.size() == 1:
+			loading_cue_indices[pool_key] = next_index
+			last_loading_cue = candidate
+			return candidate
+	return ""
+
+
 func _next_loading_cue(npc_id: String) -> String:
-	var cues: Array = NPC_LOADING_CUES.get(npc_id, ["(잠시 생각을 정리하고 있다.)"])
-	var next_index := (int(loading_cue_indices.get(npc_id, -1)) + 1) % cues.size()
-	loading_cue_indices[npc_id] = next_index
-	return str(cues[next_index])
+	var npc_cues_by_id: Dictionary = loading_cue_data.get("npcCues", {})
+	var npc_cues: Array = npc_cues_by_id.get(npc_id, [])
+	var common_cues: Array = loading_cue_data.get("commonCues", [])
+	var npc_weight_percent := clampi(int(loading_cue_data.get("npcWeightPercent", 70)), 0, 100)
+	var npc_slots := clampi(roundi(npc_weight_percent / 10.0), 0, 10)
+	var selection_bucket := (loading_cue_selection_count * 3) % 10
+	loading_cue_selection_count += 1
+	var use_npc_pool := selection_bucket < npc_slots and not npc_cues.is_empty()
+	var selected := _next_cue_from_pool(npc_id if use_npc_pool else "__common__",
+		npc_cues if use_npc_pool else common_cues)
+	if selected.is_empty() and not npc_cues.is_empty():
+		selected = _next_cue_from_pool(npc_id, npc_cues)
+	if selected.is_empty():
+		selected = _next_cue_from_pool("__common__", common_cues)
+	return selected
 
 
 func _show_initial_loading_cue() -> void:
@@ -1064,7 +1129,7 @@ func _show_decision_bridge(payload: Dictionary) -> void:
 func _dialogue_placeholder(act: int, name: String) -> String:
 	match act:
 		1:
-			return "자유롭게 이야기해 보세요. 예: 여기가 어디야? / 가장 급한 문제는? / 너는 누구야?"
+			return "예: 에드윈, 너는 무슨 일을 담당해? / 내가 원래 어떤 영주였지? / 결계핵이 뭐야?"
 		2:
 			return "리아에게 궁금한 점을 물어보거나 의견을 말해 보세요. 예: 결계가 왜 위험해? / 다른 방법은 없어?"
 		3:
@@ -1492,6 +1557,29 @@ func _run_dialogue_ui_smoke() -> void:
 	var cue_one := _next_loading_cue("steward_edwin")
 	var cue_two := _next_loading_cue("steward_edwin")
 	var cues_rotate := cue_one != cue_two
+	var npc_cues_by_id: Dictionary = loading_cue_data.get("npcCues", {})
+	var edwin_cues: Array = npc_cues_by_id.get("steward_edwin", [])
+	var common_cues: Array = loading_cue_data.get("commonCues", [])
+	var cue_content_count := common_cues.size()
+	for npc_cues_value in npc_cues_by_id.values():
+		cue_content_count += (npc_cues_value as Array).size()
+	loading_cue_indices.clear()
+	loading_cue_selection_count = 0
+	last_loading_cue = ""
+	var npc_cue_count := 0
+	var common_cue_count := 0
+	var loading_cues_never_repeat := true
+	var previous_cue := ""
+	for _index in 100:
+		var selected_cue := _next_loading_cue("steward_edwin")
+		loading_cues_never_repeat = loading_cues_never_repeat and selected_cue != previous_cue
+		previous_cue = selected_cue
+		if edwin_cues.has(selected_cue):
+			npc_cue_count += 1
+		elif common_cues.has(selected_cue):
+			common_cue_count += 1
+	var loading_mix_valid := npc_cue_count == 70 and common_cue_count == 30 \
+		and cue_content_count == 14 and loading_cues_never_repeat
 	dialogue_history = [{
 		"sequence": 0,
 		"act": 1,
@@ -1536,12 +1624,19 @@ func _run_dialogue_ui_smoke() -> void:
 	_apply_history_input_state()
 	var transition_button_enabled := next_choices_button.visible and not next_choices_button.disabled
 	var passive_layout_uses_full_body := dialogue_pages.size() == 1 and not history_row.visible and action_row.visible
+	active_loading_cue = _next_loading_cue("steward_edwin")
+	dialogue_request_in_flight = true
+	_stop_dialogue_loading()
+	_display_dialogue_text("실제 NPC 응답입니다.", false)
+	var response_replaced_loading_cue := active_loading_cue.is_empty() \
+		and npc_dialogue.text == "실제 NPC 응답입니다."
 	if page_lengths_valid and cues_rotate and typing_started and rapid_next_revealed \
 		and next_page_started and history_has_no_typing and context_active \
 		and context_rejected_after_screen_change and timing_rules_valid and transition_button_enabled \
-		and passive_layout_uses_full_body:
-		print("MOCK_DIALOGUE_UI_OK: pages=%d, cps=%.0f, cue_delay=%.2f" % [
-			pages.size(), TYPEWRITER_CHARACTERS_PER_SECOND, LOADING_CUE_DELAY_SECONDS
+		and passive_layout_uses_full_body and loading_mix_valid and response_replaced_loading_cue:
+		print("MOCK_DIALOGUE_UI_OK: pages=%d, cps=%.0f, cue_delay=%.2f, cues=%d, mix=%d/%d" % [
+			pages.size(), TYPEWRITER_CHARACTERS_PER_SECOND, LOADING_CUE_DELAY_SECONDS,
+			cue_content_count, npc_cue_count, common_cue_count
 		])
 		get_tree().quit()
 		return
@@ -1559,7 +1654,7 @@ func _run_story_layout_smoke() -> void:
 	background_image.hide()
 	character_image.hide()
 	character_placeholder.hide()
-	story_speaker.text = "내레이션"
+	story_speaker.text = _normalize_story_speaker("내레이션", "narration")
 	story_text.text = "새벽 3시 47분. 발표까지 다섯 시간.\n팀원들의 연락을 기다리며 마지막 자료를 정리했다."
 	story_continue_button.text = "계속"
 	await get_tree().process_frame
@@ -1580,6 +1675,10 @@ func _run_story_layout_smoke() -> void:
 		and button_rect.size.y >= 48.0 and button_rect.size.y <= 60.0 \
 		and story_continue_button.get_theme_color("font_color") == Color.WHITE
 	var header_hidden: bool = not ($GameScreen/SceneHeader as Control).visible
+	var speaker_normalization_valid := story_speaker.text == "나" \
+		and _normalize_story_speaker("주인공 속마음", "thought") == "나" \
+		and _normalize_story_speaker("기억 속", "card") == "나" \
+		and _normalize_story_speaker("에드윈", "dialogue") == "에드윈"
 	var screenshot_path := "/tmp/media-project-story-layout-after.png"
 	var screenshot_error := OK
 	if DisplayServer.get_name() == "headless":
@@ -1590,14 +1689,16 @@ func _run_story_layout_smoke() -> void:
 			screenshot_error = ERR_CANT_CREATE
 		else:
 			screenshot_error = viewport_image.save_png(screenshot_path)
-	if badge_valid and fixed_shell_height and text_safe and button_valid and header_hidden and screenshot_error == OK:
+	if badge_valid and fixed_shell_height and text_safe and button_valid and header_hidden \
+		and speaker_normalization_valid and screenshot_error == OK:
 		print("MOCK_STORY_LAYOUT_OK: badge=%s text=%s button=%s screenshot=%s" % [
 			speaker_rect, text_rect, button_rect, screenshot_path
 		])
 		get_tree().quit()
 		return
-	push_error("내레이션 레이아웃 검증에 실패했습니다: badge=%s fixed=%s text=%s button=%s header=%s" % [
-		badge_valid, fixed_shell_height, text_safe, button_valid, header_hidden
+	push_error("내레이션 레이아웃 검증에 실패했습니다: badge=%s fixed=%s text=%s button=%s header=%s speaker=%s" % [
+		badge_valid, fixed_shell_height, text_safe, button_valid, header_hidden,
+		speaker_normalization_valid
 	])
 	get_tree().quit(1)
 
@@ -1786,6 +1887,117 @@ func _run_loading_timing_smoke() -> void:
 		return
 	push_error("NPC 대기 연출 시간 경계 검증에 실패했습니다.")
 	get_tree().quit(1)
+
+
+func _run_button_assets_smoke() -> void:
+	title_screen.show()
+	game_screen.hide()
+	farming_screen.hide()
+	final_choice_screen.hide()
+	ending_screen.hide()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var texture := load("res://assets/ui/basic_button.png") as Texture2D
+	var image := texture.get_image() if texture != null else null
+	var alpha_bounds := Rect2i()
+	if image != null:
+		var min_x := image.get_width()
+		var min_y := image.get_height()
+		var max_x := -1
+		var max_y := -1
+		for y in image.get_height():
+			for x in image.get_width():
+				if image.get_pixel(x, y).a > 0.01:
+					min_x = mini(min_x, x)
+					min_y = mini(min_y, y)
+					max_x = maxi(max_x, x)
+					max_y = maxi(max_y, y)
+		if max_x >= min_x and max_y >= min_y:
+			alpha_bounds = Rect2i(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+	var button_rect := new_game_button.get_global_rect()
+	var source_ratio := float(image.get_width()) / float(image.get_height()) if image != null else 0.0
+	var rendered_ratio := button_rect.size.x / button_rect.size.y
+	var style_states_valid := true
+	for state_name in ["normal", "hover", "pressed", "disabled"]:
+		var state_style := new_game_button.get_theme_stylebox(state_name) as StyleBoxTexture
+		style_states_valid = style_states_valid and state_style != null \
+			and state_style.region_rect == Rect2(0, 0, 600, 130) \
+			and is_equal_approx(state_style.texture_margin_left, 70.0) \
+			and is_equal_approx(state_style.texture_margin_top, 24.0) \
+			and is_equal_approx(state_style.texture_margin_right, 70.0) \
+			and is_equal_approx(state_style.texture_margin_bottom, 24.0)
+	var screenshot_path := "/tmp/media-project-button-assets.png"
+	var screenshot_error := OK
+	if DisplayServer.get_name() != "headless":
+		var viewport_image := get_viewport().get_texture().get_image()
+		if viewport_image == null:
+			screenshot_error = ERR_CANT_CREATE
+		else:
+			screenshot_error = viewport_image.save_png(screenshot_path)
+	else:
+		screenshot_path = "headless-dummy-renderer"
+	if image != null and image.get_size() == Vector2i(600, 130) \
+		and alpha_bounds.size.x > 0 and alpha_bounds.size.y > 0 \
+		and absf(source_ratio - rendered_ratio) <= 0.05 and style_states_valid \
+		and screenshot_error == OK:
+		print("MOCK_BUTTON_ASSETS_OK: source=%s alpha=%s source_ratio=%.3f rendered=%s rendered_ratio=%.3f screenshot=%s" % [
+			image.get_size(), alpha_bounds, source_ratio, button_rect, rendered_ratio, screenshot_path
+		])
+		get_tree().quit()
+		return
+	push_error("버튼 에셋 측정에 실패했습니다.")
+	get_tree().quit(1)
+
+
+func _run_act1_opening_smoke() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var modern_path := "/tmp/media-project-act1-modern-after.png"
+	var office_path := "/tmp/media-project-act1-office-after.png"
+	var surprised_path := "/tmp/media-project-act1-surprised-after.png"
+	var red_memory_path := "/tmp/media-project-act1-red-memory-after.png"
+	var modern_saved := _save_viewport_png(modern_path) == OK
+	var office_saved := false
+	var surprised_saved := false
+	var red_memory_saved := false
+	var player_speakers_valid := story_speaker.text == "나"
+	while story_index < story_beats.size() - 1:
+		_advance_story()
+		await get_tree().process_frame
+		var beat: Dictionary = story_beats[story_index]
+		var beat_speaker := str(beat.get("speaker", ""))
+		if beat_speaker == "나":
+			player_speakers_valid = player_speakers_valid and story_speaker.text == "나"
+		if not office_saved and str(beat.get("backgroundId", "")) == "study_night" \
+			and bool(beat.get("hideCharacter", false)):
+			office_saved = _save_viewport_png(office_path) == OK
+		if not surprised_saved and str(beat.get("emotion", "")) == "surprised":
+			surprised_saved = _save_viewport_png(surprised_path) == OK
+		if not red_memory_saved and str(beat.get("backgroundId", "")) == "cracked_sky_castle_wall":
+			await get_tree().create_timer(0.12).timeout
+			red_memory_saved = _save_viewport_png(red_memory_path) == OK
+	var story_contract_valid := story_beats.size() >= 25 \
+		and story_beats.any(func(beat: Dictionary) -> bool: return str(beat.get("text", "")).contains("원래 이 몸의 기억은 하나도 없는")) \
+		and story_beats.any(func(beat: Dictionary) -> bool: return str(beat.get("text", "")).contains("결정하기 전에 몇 가지부터 확인"))
+	if modern_saved and office_saved and surprised_saved and red_memory_saved \
+		and player_speakers_valid and story_contract_valid:
+		print("MOCK_ACT1_OPENING_OK: beats=%d screenshots=%s,%s,%s,%s" % [
+			story_beats.size(), modern_path, office_path, surprised_path, red_memory_path
+		])
+		get_tree().quit()
+		return
+	push_error("Act 1 오프닝 렌더링 검증에 실패했습니다: modern=%s office=%s surprised=%s red=%s speaker=%s story=%s" % [
+		modern_saved, office_saved, surprised_saved, red_memory_saved,
+		player_speakers_valid, story_contract_valid
+	])
+	get_tree().quit(1)
+
+
+func _save_viewport_png(path: String) -> Error:
+	if DisplayServer.get_name() == "headless":
+		return ERR_UNAVAILABLE
+	var viewport_image := get_viewport().get_texture().get_image()
+	return ERR_CANT_CREATE if viewport_image == null else viewport_image.save_png(path)
 
 
 func _session_file_path() -> String:

@@ -211,7 +211,7 @@ static async Task<TestResult> RunDecisionBridgeGuardAsync(MockGameContent conten
 
 static async Task<TestResult> RunStoryBeatContractAsync(MockGameContent content)
 {
-    const string expected = "프롤로그/균열 전조/7일 후 최종 명령";
+    const string expected = "Act1 6장면/기억 없음/붉은 하늘/자유 대화 연결/Act4 전조와 최종 명령";
     try
     {
         await using var fixture = await GameFixture.CreateAsync(content);
@@ -220,9 +220,13 @@ static async Task<TestResult> RunStoryBeatContractAsync(MockGameContent content)
         var act4 = content.GetAct(4);
         var act4Beats = act4.StoryBeats ?? [];
         var finaleBeats = act4.FinaleBeats ?? [];
-        var passed = act1Beats.Count >= 8
+        var passed = act1Beats.Count >= 25
             && act1Beats.Any(beat => beat.BackgroundId == "modern_library")
-            && act1Beats.Any(beat => beat.Text.Contains("3년 뒤"))
+            && act1Beats.Any(beat => beat.Text.Contains("원래 이 몸의 기억은 하나도 없는"))
+            && act1Beats.Any(beat => beat.NpcId == "steward_edwin" && beat.Emotion == "surprised")
+            && act1Beats.Any(beat => beat.Text.Contains("3년 뒤")
+                && beat.BackgroundId == "cracked_sky_castle_wall")
+            && act1Beats.Any(beat => beat.Text.Contains("결정하기 전에 몇 가지부터 확인"))
             && act4Beats.Any(beat => beat.Text.Contains("7일 뒤"))
             && finaleBeats.Any(beat => beat.BackgroundId == "cracked_sky_castle_wall")
             && finaleBeats.Any(beat => beat.Text.Contains("최종 명령"));
@@ -333,6 +337,7 @@ static async Task<TestResult> RunOpenAiHttpContractAsync(MockGameContent content
             "none", 1, ["kind", "pragmatic"], personaJson, context));
         var parsed = JsonSerializer.Deserialize<GeneratedDialogue>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         using var requestDocument = JsonDocument.Parse(handler.RequestBody!);
+        var developerPrompt = requestDocument.RootElement.GetProperty("input")[0].GetProperty("content").GetString()!;
         var prompt = requestDocument.RootElement.GetProperty("input")[1].GetProperty("content").GetString()!;
         var requestOk = handler.RequestBody?.Contains("\"json_schema\"") == true
             && handler.RequestBody.Contains("\"additionalProperties\":false")
@@ -340,6 +345,8 @@ static async Task<TestResult> RunOpenAiHttpContractAsync(MockGameContent content
             && handler.RequestBody.Contains("\"maxLength\":300")
             && handler.RequestBody.Contains("\"minLength\":1")
             && handler.RequestBody.Contains("\"type\":[\"string\",\"null\"]")
+            && developerPrompt.Contains("빙의 이전 영주의 기억")
+            && developerPrompt.Contains("빙의 사실을 확정적으로 알거나 단정하지 않는다")
             && prompt.Contains("core_traits") && prompt.Contains("결론부터 말한다")
             && prompt.Contains(context.Summary) && prompt.Contains(context.PreviousPlayerText)
             && prompt.Contains(context.PreviousNpcDialogue) && prompt.Contains("현재 플레이어 발화")
