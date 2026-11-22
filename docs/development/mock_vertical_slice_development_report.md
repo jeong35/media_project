@@ -655,3 +655,121 @@ dotnet run --project tests/Game.Rules.Tests/Game.Rules.Tests.csproj
 - 문 두드림과 키보드 정지는 현재 텍스트 연출이며 별도 음원은 추가하지 않았다.
 - 실제 플레이 속도는 29개 비트 기준으로 조정했으나, 최종 2~3분 체감은 사용자 플레이테스트에서 확인할 수 있다.
 - 작업은 `feature/act1-opening-polish` 브랜치의 미커밋 변경으로 유지한다. 검토 승인 전에는 commit·push하지 않는다.
+
+---
+
+## 2026-11-22 — Act 3 농사 목적 도입·직접 조작형 농사 UI
+
+### 목표
+
+- Act 3 시작 전에 결계 붕괴가 식량과 주민 생활에 미치는 영향, 마력보리의 세 가지 쓰임과 자원 제약을 마르타의 대사로 설명한다.
+- 큰 파란 버튼을 나열하던 농사 화면을 밭 오브젝트·밭고랑·작업대 토큰을 직접 고르는 화면으로 바꾼다.
+- 기존 서버 판정과 `장애물 → 씨앗 → 물 → 작업 방식 → 결과` 흐름, 중간 저장과 이어하기를 유지한다.
+- NPC·스토리 대화창을 960×540 화면의 약 1/3인 180px로 고정하고 플레이어용 초록 상태 문구를 숨긴다.
+
+### 구현 범위와 핵심 판단
+
+- Act 3 고정 스토리를 10개 비트로 교체했다. 마르타가 결계 붕괴와 밥줄의 관계, 마력보리의 식량·판매·결계 보조 마력 용도, 물·일손·시간의 한계를 설명하고 주인공이 자원 배분 문제임을 이해한 뒤 농사로 들어간다. 고정 비트이므로 자유 대화 횟수와 LLM 호출 횟수에는 포함되지 않는다.
+- `farming_minigame.tscn`을 독립 씬으로 분리했다. 상단 목표·진행률, 좌측 4단계 목재 패널, 중앙 장애물과 네 밭고랑, 하단 물/작업 방식 작업대, 상황 캡션, 결과 CTA의 구조다.
+- 제공된 1448×1086 농사 UI 시트를 원본으로 보존하고 `AtlasTexture`로 돌·잡초·씨앗·물·장갑·수정·삽 아이콘만 참조한다. 실제 Metal 렌더에서 이웃 아이콘 조각이 섞인 범위를 확인해 Atlas 영역을 다시 좁혔다.
+- 장애물과 밭고랑은 배경 위의 큰 클릭 타깃으로, 물 배분과 작업 방식은 하단 작업대의 토글 토큰으로 표현했다. 현재 단계는 금색, 완료 단계는 녹색 체크, 미래 단계는 비활성 상태로 구분한다.
+- UI 입력 순서를 실제로 잠갔다. 장애물을 모두 치운 뒤 씨앗 칸이 열리고, 올바른 씨앗 3개를 고른 뒤 물 배분, 물을 확정한 뒤 작업 방식이 열린다. 네 단계가 모두 끝나야 `농사 결과 확인`이 활성화된다.
+- 서버의 기존 기본값 `community/manual`과 별개로 사용자가 실제로 물과 작업 방식을 선택했는지 `waterChoiceConfirmed`, `methodChoiceConfirmed`를 중간 진행 응답에 보존한다. 기존 저장 및 생성자 호환을 위해 서버 계약 기본값은 `true`로 유지하고 새 클라이언트 체크포인트는 명시적 값을 전송한다.
+- 농사 진행 캡션은 내부 평가가 아니라 플레이 장면의 짧은 분위기 문구만 표시한다. 기존 대화 `StatusLabel`은 씬 기본 상태와 런타임 모두 비표시로 고정해 NPC 상태, 플레이어 입력, 내부 평가성 초록 글씨가 화면에 나타나지 않게 했다.
+- NPC 자유 대화와 고정 스토리 shell을 모두 180px로 고정했다. 이름표는 220×52px, 본문은 장식과 겹치지 않는 40px 이상 고정 영역, 입력·액션은 42px, 탐색은 23px 영역으로 분리했다. 짧고 긴 문장 모두 창 높이는 변하지 않으며 긴 문장만 내부 페이지로 나뉜다.
+- 테스트 환경에서 5050 충돌을 피할 수 있도록 클라이언트에 `--api-base=` 실행 인자만 추가했다. 기본 실행 주소는 계속 `http://127.0.0.1:5050`이고 게임 동작에는 변화가 없다.
+
+### 변경 파일
+
+- `client/assets/ui/farming_ui_sheet.png`: 사용자가 제공한 농사 UI 에셋 시트 원본.
+- `client/scenes/farming_minigame.tscn`: 직접 조작형 농사 전용 씬과 AtlasTexture, 목재 패널·작업대·캡션 레이아웃.
+- `client/scenes/main.tscn`: 기존 버튼 나열형 농사 노드를 전용 씬 인스턴스로 교체하고 대화·스토리 창을 180px로 고정.
+- `client/scripts/main.gd`: 4단계 잠금·선택·완료 상태, 분위기 캡션, 중간 저장 플래그, 숨김 상태 라벨, 농사 렌더 스모크와 테스트 API 주소 인자.
+- `client/themes/game_theme.tres`: 농사 장애물·밭고랑·선택 토큰 전용 rustic 테마 변형과 금색/완료 상태.
+- `content/acts/act3_mock.json`: 마르타와 주인공의 농사 목적 도입 10개 비트.
+- `docs/story_script_draft.md`: 실제 Act 3 JSON과 같은 도입 대사와 새 농사 화면 구조.
+- `docs/게임개발명세서.md`: 농사 단계를 작업 방식까지 포함한 4단계로 정정.
+- `server/Game.Api/Contracts/GameContracts.cs`: 물·작업 방식 선택 확정 상태를 중간 진행 계약에 추가.
+- `server/Game.Api/Services/MockGameService.cs`: 선택 확정 상태 저장·복원.
+- `tests/Game.Rules.Tests/Program.cs`: Act 3 도입 계약과 농사 선택 확정 상태 복구 검증.
+
+### 검증
+
+- `dotnet build server/Game.Api/Game.Api.csproj --no-restore`: 경고 0개, 오류 0개.
+- 규칙·통합 테스트 35/35 통과. Act 3 10개 스토리 비트와 농사 중간 복구 계약을 포함한다.
+- Godot 4.5.1 프로젝트·씬·스크립트 파싱 성공. macOS 인증서 조회 경고 외 프로젝트 오류 0개.
+- 농사 UI 스모크에서 960×540 전체 화면, 장애물/씨앗/토큰 최소 120×60 클릭 영역, 초기 결과 버튼 비활성, 4단계 완료 후 활성, 진행률 3/3·3/3을 확인했다.
+- 대화 레이아웃 스모크에서 180px 고정 shell, 220×52 이름표, 844×40 본문, 844×42 입력·액션 행, 206×23 탐색 그룹을 확인했다. 스토리와 비입력 전환 대사도 같은 고정 높이에서 통과했다.
+- 실제 macOS Metal 렌더로 초기 화면 `/tmp/media-project-farming-redesign-initial.png`과 완료 화면 `/tmp/media-project-farming-redesign-completed.png`을 저장해 배경 위 오브젝트, 미래 단계 비활성, 금색 선택, 녹색 체크, Atlas 잘림 여부를 확인했다.
+- 5051 격리 서버의 Godot Mock 전체 게임에서 새 게임, Act 3 진입과 농사 완료, Act 4 전환, 엔딩까지 통과했다.
+- 별도 중간 저장 시나리오에서 농사 상태를 저장한 뒤 이어하기로 복원하고 남은 단계를 완료해 Act 4와 엔딩까지 진행했다.
+- Godot 자동 시나리오 10개 통과: 프로젝트 파싱, 농사 레이아웃, 대화 레이아웃, 스토리 레이아웃, 비입력 대화, 타이핑/대기, 버튼 비율, 전체 완주, 농사 중간 저장, 농사 이어하기.
+- `git diff --check` 통과.
+- 실제 Live API 호출 0회, 성공률·지연 N/A, fallback 0회.
+
+### 미구현 부분과 다음 작업
+
+- 에셋 시트는 단일 원본을 AtlasTexture로 참조한다. 추후 각 상태별 전용 투명 PNG를 받으면 hover·완료 상태를 시트의 완성 일러스트로 더 정교하게 교체할 수 있다.
+- 마우스 hover의 미세한 광량과 각 토큰 아이콘의 최종 크기는 사용자 플레이 확인 후 1차례 시각 조정할 수 있다.
+- 작업은 `feature/farming-minigame-redesign` 브랜치의 미커밋 변경으로 유지한다. 사용자 승인 전에는 commit·push하지 않는다.
+
+---
+
+## 2026-11-23 — 사용자 기준 Theme 스타일의 파생 스타일 동기화
+
+### 조사 결과
+
+- 사용자가 Godot 편집기에서 교체한 `basic_button.png`, `dialogue_panel.png`, `name_plate.png`는 모두 2172×724 원본이며 로컬 미커밋 변경으로 존재했다.
+- 정상 기준인 `NamePlate`, `OrnatePrimaryButton`, `DialoguePanel`의 StyleBoxTexture와 참조는 변경하지 않았다.
+- `CompactNamePlate`만 이전 520×136 이름표용 region/margin을, `OrnateChoiceButton`만 이전 600×130 버튼용 region/margin을, 공통 `PanelContainer`만 이전 1200×348 대사창용 region/margin을 유지하고 있었다.
+- `Button`, `CompactButton`은 StyleBoxFlat, `CheckButton`은 StyleBoxEmpty, 농사 오브젝트·밭고랑·토큰은 전용 StyleBoxFlat, `ProgressBar`와 `TextEdit`도 각각 StyleBoxFlat을 사용하므로 장식형 기준 스타일을 적용하지 않았다.
+- `DialogueText`, `StoryText`, `Label`은 텍스트 속성만 가지며 텍스처 StyleBox 참조가 없어 변경 대상이 아니었다.
+
+### 변경
+
+- `CompactNamePlate`의 텍스처와 region, texture margin, axis stretch, expand margin을 `NamePlate`와 동일하게 맞추고 기존 compact content margin과 14px 글꼴은 유지했다.
+- `OrnateChoiceButton`의 Normal/Hover/Pressed/Disabled geometry를 `OrnatePrimaryButton` Normal과 동일하게 맞췄다. 선택지 글꼴·줄바꿈·노드 크기·배치는 유지하고 Hover/Pressed/Disabled의 기존 modulate 색상만 보존했다.
+- 공통 `PanelContainer`의 대사창 텍스처 geometry를 `DialoguePanel`과 동일하게 맞추고 공통 패널의 기존 content margin은 유지했다.
+- 버튼 자동 검증에서 삭제된 600×130 하드코딩 대신 기준 스타일과 파생 스타일의 texture, region, texture margin, content margin, axis stretch, expand margin 일치 여부를 검사하도록 바꿨다. 이는 테스트 코드만의 변경이며 게임 로직에는 영향이 없다.
+
+### 검증
+
+- Godot 4.5.1 프로젝트·Theme 파싱 성공.
+- 공통 에셋 스모크: 원본 2172×724, `OrnatePrimaryButton` 4상태 일치, `OrnateChoiceButton` 4상태 일치, `NamePlate/CompactNamePlate` geometry 일치, `DialoguePanel/PanelContainer` geometry 일치.
+- 실제 macOS Metal 렌더에서 새 게임·이어하기 버튼, NPC 이름표, 대사창, 대답하기 버튼과 3개 선택지 버튼을 확인했다. 좌우 장식 잘림, 비대칭 테두리, 가로 번짐, 텍스트와 장식 겹침은 발견되지 않았다.
+- 대화·스토리·농사·타이틀/엔딩 shell 스모크 모두 통과했다. 기존 노드 크기, 컨테이너, 고정 대사창 높이, 텍스트 속성, 농사 상호작용은 변경하지 않았다.
+- 실제 Live API 호출 0회, 성공률·지연 N/A, fallback 0회.
+
+---
+
+## 2026-11-22 — 화자 글꼴·타이틀/엔딩 배경·전 구간 BGM
+
+### 구현
+
+- 대사창과 고정 스토리 이름표가 공유하는 `NamePlate` 글꼴을 20px에서 16px로 변경해 정확히 0.8배로 축소했다. 이름표 에셋 크기와 220×52px 고정 영역은 유지한다.
+- 시작 메뉴와 직업 엔딩 화면에 `community_barley_field.png`를 공통 배경으로 적용했다. 기존 `PageBackgroundShade`를 함께 사용해 메뉴와 엔딩 텍스트 대비를 유지한다.
+- 제공된 `Village Twilight.mp3`를 `client/assets/audio/village_twilight.mp3`로 추가하고 루트 `AudioStreamPlayer`에 연결했다. 루트 노드가 게임 내내 유지되므로 장면·Act·농사·엔딩 전환에서도 재시작 없이 이어지며, `AudioStreamMP3.loop`를 활성화해 처음부터 끝까지 반복한다. 대사를 방해하지 않도록 볼륨은 -9dB로 설정했다.
+- 헤드리스 자동 테스트에서는 오디오 장치를 열지 않고 스트림·루프 설정만 검사한다. 실제 macOS Metal/오디오 실행에서는 재생 상태까지 확인한다.
+
+### 검증
+
+- Godot 4.5.1 MP3 import와 프로젝트 파싱 성공.
+- 프레젠테이션 shell 스모크에서 시작 배경=공동밭, 엔딩 배경=공동밭, NPC·스토리 이름표 글꼴=16px, MP3 루프=true를 확인했다.
+- 실제 macOS Metal/오디오 실행에서 `BackgroundMusic.playing=true` 상태가 엔딩 전환 뒤에도 유지되는 것을 확인했다.
+- 기존 대화·스토리·농사 레이아웃 스모크가 모두 통과했다.
+- 실제 Live API 호출 0회, 성공률·지연 N/A, fallback 0회.
+
+---
+
+## 2026-11-23 — 엔딩 보조 문구 정리
+
+### 변경
+
+- 직업 엔딩 화면의 임시 헤더 `임시 직업 엔딩`을 숨겼다.
+- 플레이어에게 노출되던 초록색 보조 문구 `직업 위상 · 엔딩 톤`을 숨겼다.
+- 직업명, 칭호, 영지 결과, 에필로그, 기록과 공유 문구는 그대로 유지했으며 엔딩 판정 및 저장 로직은 변경하지 않았다.
+
+### 검증
+
+- 프레젠테이션 shell 스모크에 두 보조 Label의 비표시 상태 검증을 추가했다.
+- 실제 Live API 호출 0회, 성공률·지연 N/A, fallback 0회.

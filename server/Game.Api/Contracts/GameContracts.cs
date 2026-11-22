@@ -43,9 +43,10 @@ public sealed record ChoiceResultResponse(string ResultNarration, string Feedbac
     GameStateResponse State, NextActResponse? NextAct, NextActivityResponse? NextActivity, EndingResponse? Ending);
 public sealed record FarmingResultRequest(int RemovedObstacles, int CorrectSeeds, string WaterTarget, string Method, string IdempotencyKey);
 public sealed record FarmingProgressRequest(IReadOnlyList<int> RemovedObstacleIndexes, IReadOnlyList<int> PlantedSeedIndexes,
-    string WaterTarget, string Method, string IdempotencyKey);
+    string WaterTarget, string Method, string IdempotencyKey, bool WaterChoiceConfirmed = true,
+    bool MethodChoiceConfirmed = true);
 public sealed record FarmingProgressResponse(IReadOnlyList<int> RemovedObstacleIndexes, IReadOnlyList<int> PlantedSeedIndexes,
-    string WaterTarget, string Method);
+    string WaterTarget, string Method, bool WaterChoiceConfirmed = true, bool MethodChoiceConfirmed = true);
 public sealed record FarmingResultResponse(int Score, string Feedback, IReadOnlyDictionary<string, int> AppliedChanges,
     GameStateResponse State, NextActResponse? NextAct, EndingResponse? Ending);
 public sealed record SessionSnapshotResponse(Guid SessionId, string Status, int Act, int Turn, string Phase,

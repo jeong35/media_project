@@ -1,0 +1,465 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/ui/farming_ui_sheet.png" id="1_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasRock"]
+atlas = ExtResource("1_sheet")
+region = Rect2(72, 960, 180, 126)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="AtlasWeed"]
+atlas = ExtResource("1_sheet")
+region = Rect2(245, 955, 155, 131)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="AtlasSeed"]
+atlas = ExtResource("1_sheet")
+region = Rect2(450, 955, 140, 126)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="AtlasWater"]
+atlas = ExtResource("1_sheet")
+region = Rect2(615, 945, 95, 140)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="AtlasGloves"]
+atlas = ExtResource("1_sheet")
+region = Rect2(720, 950, 160, 135)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="AtlasCrystal"]
+atlas = ExtResource("1_sheet")
+region = Rect2(895, 930, 135, 155)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="AtlasShovel"]
+atlas = ExtResource("1_sheet")
+region = Rect2(1040, 950, 160, 136)
+filter_clip = true
+
+[sub_resource type="StyleBoxFlat" id="StyleHeader"]
+bg_color = Color(0.18, 0.075, 0.035, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.82, 0.58, 0.2, 0.95)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+content_margin_left = 20.0
+content_margin_top = 5.0
+content_margin_right = 20.0
+content_margin_bottom = 5.0
+
+[sub_resource type="StyleBoxFlat" id="StyleWoodPanel"]
+bg_color = Color(0.14, 0.07, 0.035, 0.84)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.53, 0.34, 0.14, 0.95)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="StyleWorkbench"]
+bg_color = Color(0.19, 0.095, 0.04, 0.9)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.43, 0.25, 0.09, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleCaption"]
+bg_color = Color(0.075, 0.055, 0.045, 0.78)
+border_width_top = 1
+border_width_bottom = 1
+border_color = Color(0.73, 0.52, 0.24, 0.82)
+content_margin_left = 16.0
+content_margin_top = 5.0
+content_margin_right = 16.0
+content_margin_bottom = 5.0
+
+[node name="FarmingScreen" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Shade" type="ColorRect" parent="."]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.045, 0.02, 0.18)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 8
+
+[node name="Layout" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Header" type="VBoxContainer" parent="Margin/Layout"]
+custom_minimum_size = Vector2(0, 76)
+layout_mode = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="TitlePlate" type="PanelContainer" parent="Margin/Layout/Header"]
+custom_minimum_size = Vector2(410, 38)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleHeader")
+
+[node name="Title" type="Label" parent="Margin/Layout/Header/TitlePlate"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.68, 1)
+theme_override_colors/font_shadow_color = Color(0.08, 0.03, 0.01, 0.9)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 24
+text = "마력보리 공동밭"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Instructions" type="Label" parent="Margin/Layout/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.95, 0.84, 1)
+theme_override_colors/font_shadow_color = Color(0.08, 0.04, 0.02, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 13
+text = "돌과 잡초를 치우고 씨앗을 배치한 뒤, 남은 물과 작업 방식을 정하세요."
+horizontal_alignment = 1
+
+[node name="Progress" type="Label" parent="Margin/Layout/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.8, 0.36, 1)
+theme_override_colors/font_shadow_color = Color(0.08, 0.04, 0.02, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 13
+text = "장애물 0/3 · 올바른 씨앗 0/3"
+horizontal_alignment = 1
+
+[node name="MainArea" type="HBoxContainer" parent="Margin/Layout"]
+custom_minimum_size = Vector2(0, 185)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="StagePanel" type="PanelContainer" parent="Margin/Layout/MainArea"]
+custom_minimum_size = Vector2(184, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleWoodPanel")
+
+[node name="Steps" type="VBoxContainer" parent="Margin/Layout/MainArea/StagePanel"]
+layout_mode = 2
+theme_override_constants/separation = 5
+alignment = 1
+
+[node name="Heading" type="Label" parent="Margin/Layout/MainArea/StagePanel/Steps"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.93, 0.77, 0.47, 1)
+theme_override_font_sizes/font_size = 13
+text = "오늘의 작업"
+horizontal_alignment = 1
+
+[node name="Stage0" type="PanelContainer" parent="Margin/Layout/MainArea/StagePanel/Steps"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage0"]
+layout_mode = 2
+text = "1  밭 정리"
+vertical_alignment = 1
+
+[node name="Stage1" type="PanelContainer" parent="Margin/Layout/MainArea/StagePanel/Steps"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage1"]
+layout_mode = 2
+text = "2  씨앗 배치"
+vertical_alignment = 1
+
+[node name="Stage2" type="PanelContainer" parent="Margin/Layout/MainArea/StagePanel/Steps"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage2"]
+layout_mode = 2
+text = "3  남은 물 배분"
+vertical_alignment = 1
+
+[node name="Stage3" type="PanelContainer" parent="Margin/Layout/MainArea/StagePanel/Steps"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage3"]
+layout_mode = 2
+text = "4  작업 방식"
+vertical_alignment = 1
+
+[node name="FieldArea" type="VBoxContainer" parent="Margin/Layout/MainArea"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="ObstacleHeading" type="Label" parent="Margin/Layout/MainArea/FieldArea"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.7, 1)
+theme_override_colors/font_shadow_color = Color(0.08, 0.04, 0.02, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 13
+text = "밭 위의 돌과 잡초를 직접 눌러 치우세요"
+horizontal_alignment = 1
+
+[node name="Obstacles" type="HBoxContainer" parent="Margin/Layout/MainArea/FieldArea"]
+custom_minimum_size = Vector2(0, 76)
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="Rock1" type="Button" parent="Margin/Layout/MainArea/FieldArea/Obstacles"]
+custom_minimum_size = Vector2(172, 76)
+layout_mode = 2
+theme_type_variation = &"FarmingObjectButton"
+icon = SubResource("AtlasRock")
+expand_icon = true
+icon_max_width = 78
+text = "돌 치우기"
+
+[node name="Weed1" type="Button" parent="Margin/Layout/MainArea/FieldArea/Obstacles"]
+custom_minimum_size = Vector2(172, 76)
+layout_mode = 2
+theme_type_variation = &"FarmingObjectButton"
+icon = SubResource("AtlasWeed")
+expand_icon = true
+icon_max_width = 72
+text = "잡초 뽑기"
+
+[node name="Rock2" type="Button" parent="Margin/Layout/MainArea/FieldArea/Obstacles"]
+custom_minimum_size = Vector2(172, 76)
+layout_mode = 2
+theme_type_variation = &"FarmingObjectButton"
+icon = SubResource("AtlasRock")
+expand_icon = true
+icon_max_width = 78
+text = "돌 치우기"
+
+[node name="SeedHeading" type="Label" parent="Margin/Layout/MainArea/FieldArea"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.7, 1)
+theme_override_colors/font_shadow_color = Color(0.08, 0.04, 0.02, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 13
+text = "마력보리 씨앗을 심을 밭고랑을 고르세요"
+horizontal_alignment = 1
+
+[node name="SeedCells" type="HBoxContainer" parent="Margin/Layout/MainArea/FieldArea"]
+custom_minimum_size = Vector2(0, 68)
+layout_mode = 2
+theme_override_constants/separation = 7
+alignment = 1
+
+[node name="Seed0" type="Button" parent="Margin/Layout/MainArea/FieldArea/SeedCells"]
+custom_minimum_size = Vector2(132, 68)
+layout_mode = 2
+theme_type_variation = &"FarmingPlotButton"
+icon = SubResource("AtlasSeed")
+expand_icon = true
+icon_max_width = 50
+text = "비옥한 칸 A"
+
+[node name="Seed1" type="Button" parent="Margin/Layout/MainArea/FieldArea/SeedCells"]
+custom_minimum_size = Vector2(132, 68)
+layout_mode = 2
+theme_type_variation = &"FarmingPlotButton"
+icon = SubResource("AtlasSeed")
+expand_icon = true
+icon_max_width = 50
+text = "비옥한 칸 B"
+
+[node name="Seed2" type="Button" parent="Margin/Layout/MainArea/FieldArea/SeedCells"]
+custom_minimum_size = Vector2(132, 68)
+layout_mode = 2
+theme_type_variation = &"FarmingPlotButton"
+icon = SubResource("AtlasSeed")
+expand_icon = true
+icon_max_width = 50
+text = "비옥한 칸 C"
+
+[node name="Seed3" type="Button" parent="Margin/Layout/MainArea/FieldArea/SeedCells"]
+custom_minimum_size = Vector2(132, 68)
+layout_mode = 2
+theme_type_variation = &"FarmingPlotButton"
+icon = SubResource("AtlasSeed")
+expand_icon = true
+icon_max_width = 50
+text = "메마른 칸"
+
+[node name="WorkbenchRow" type="HBoxContainer" parent="Margin/Layout"]
+custom_minimum_size = Vector2(0, 104)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="WaterBench" type="PanelContainer" parent="Margin/Layout/WorkbenchRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleWorkbench")
+
+[node name="Content" type="VBoxContainer" parent="Margin/Layout/WorkbenchRow/WaterBench"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Margin/Layout/WorkbenchRow/WaterBench/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 13
+text = "3  남은 물 배분"
+horizontal_alignment = 1
+
+[node name="WaterChoices" type="HBoxContainer" parent="Margin/Layout/WorkbenchRow/WaterBench/Content"]
+layout_mode = 2
+theme_override_constants/separation = 5
+alignment = 1
+
+[node name="Community" type="Button" parent="Margin/Layout/WorkbenchRow/WaterBench/Content/WaterChoices"]
+custom_minimum_size = Vector2(130, 66)
+layout_mode = 2
+theme_type_variation = &"FarmingTokenButton"
+toggle_mode = true
+icon = SubResource("AtlasWater")
+expand_icon = true
+icon_max_width = 42
+text = "주민 공동밭"
+
+[node name="Ward" type="Button" parent="Margin/Layout/WorkbenchRow/WaterBench/Content/WaterChoices"]
+custom_minimum_size = Vector2(130, 66)
+layout_mode = 2
+theme_type_variation = &"FarmingTokenButton"
+toggle_mode = true
+icon = SubResource("AtlasCrystal")
+expand_icon = true
+icon_max_width = 42
+text = "결계핵 동력밭"
+
+[node name="Market" type="Button" parent="Margin/Layout/WorkbenchRow/WaterBench/Content/WaterChoices"]
+custom_minimum_size = Vector2(130, 66)
+layout_mode = 2
+theme_type_variation = &"FarmingTokenButton"
+toggle_mode = true
+icon = SubResource("AtlasSeed")
+expand_icon = true
+icon_max_width = 42
+text = "판매용 밭"
+
+[node name="MethodBench" type="PanelContainer" parent="Margin/Layout/WorkbenchRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleWorkbench")
+
+[node name="Content" type="VBoxContainer" parent="Margin/Layout/WorkbenchRow/MethodBench"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Margin/Layout/WorkbenchRow/MethodBench/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 13
+text = "4  작업 방식"
+horizontal_alignment = 1
+
+[node name="MethodChoices" type="HBoxContainer" parent="Margin/Layout/WorkbenchRow/MethodBench/Content"]
+layout_mode = 2
+theme_override_constants/separation = 5
+alignment = 1
+
+[node name="Manual" type="Button" parent="Margin/Layout/WorkbenchRow/MethodBench/Content/MethodChoices"]
+custom_minimum_size = Vector2(130, 66)
+layout_mode = 2
+theme_type_variation = &"FarmingTokenButton"
+toggle_mode = true
+icon = SubResource("AtlasGloves")
+expand_icon = true
+icon_max_width = 42
+text = "주민과 수작업"
+
+[node name="Magic" type="Button" parent="Margin/Layout/WorkbenchRow/MethodBench/Content/MethodChoices"]
+custom_minimum_size = Vector2(130, 66)
+layout_mode = 2
+theme_type_variation = &"FarmingTokenButton"
+toggle_mode = true
+icon = SubResource("AtlasCrystal")
+expand_icon = true
+icon_max_width = 42
+text = "마력 사용"
+
+[node name="Tools" type="Button" parent="Margin/Layout/WorkbenchRow/MethodBench/Content/MethodChoices"]
+custom_minimum_size = Vector2(130, 66)
+layout_mode = 2
+theme_type_variation = &"FarmingTokenButton"
+toggle_mode = true
+icon = SubResource("AtlasShovel")
+expand_icon = true
+icon_max_width = 42
+text = "개량 도구"
+
+[node name="CaptionPanel" type="PanelContainer" parent="Margin/Layout"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleCaption")
+
+[node name="Feedback" type="Label" parent="Margin/Layout/CaptionPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.88, 0.76, 1)
+theme_override_colors/font_shadow_color = Color(0.04, 0.02, 0.01, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 12
+text = "영주는 주민들과 같은 줄에 서서 밭을 살폈다."
+horizontal_alignment = 1
+vertical_alignment = 1
+text_overrun_behavior = 3
+
+[node name="FinishButton" type="Button" parent="Margin/Layout"]
+custom_minimum_size = Vector2(280, 48)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"OrnatePrimaryButton"
+disabled = true
+text = "농사 결과 확인"

@@ -337,7 +337,8 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             throw new GameRuleException("INVALID_FARMING_METHOD", "허용되지 않은 작업 방식입니다.");
 
         var response = new FarmingProgressResponse(request.RemovedObstacleIndexes.Order().ToArray(),
-            request.PlantedSeedIndexes.Order().ToArray(), request.WaterTarget, request.Method);
+            request.PlantedSeedIndexes.Order().ToArray(), request.WaterTarget, request.Method,
+            request.WaterChoiceConfirmed, request.MethodChoiceConfirmed);
         database.GameEvents.Add(CreateEvent(sessionId, await NextSequenceAsync(sessionId), "FarmingProgressSaved",
             session.CurrentAct, response, request.IdempotencyKey));
         session.UpdatedAt = DateTimeOffset.UtcNow;

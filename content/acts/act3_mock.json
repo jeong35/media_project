@@ -146,7 +146,7 @@
     {
       "kind": "dialogue",
       "speaker": "마르타",
-      "text": "영주님, 밥은 드셨어요?",
+      "text": "영주님, 결계가 무너지면 가장 먼저 위험해지는 게 뭔지 아세요?",
       "backgroundId": "community_barley_field",
       "npcId": "farmer_marta",
       "npcName": "마르타",
@@ -154,8 +154,8 @@
     },
     {
       "kind": "dialogue",
-      "speaker": "주인공",
-      "text": "……지금 그게 중요해?",
+      "speaker": "나",
+      "text": "음… 성벽? 마법사?",
       "backgroundId": "community_barley_field",
       "npcId": "farmer_marta",
       "npcName": "마르타",
@@ -164,20 +164,74 @@
     {
       "kind": "dialogue",
       "speaker": "마르타",
-      "text": "하늘이 무너져도 사람은 오늘 먹고살아야죠.\n\n결계 공사에 일손이 다 빠져서 밭이 엉망이에요.",
+      "text": "아이고, 밥줄이죠! 밥줄!\n결계가 무너지면 밭도 망가지고, 마력이 끊기면 식량을 구하기도 어려워져요.",
       "backgroundId": "community_barley_field",
       "npcId": "farmer_marta",
       "npcName": "마르타",
       "emotion": "worried"
     },
     {
-      "kind": "thought",
-      "speaker": "주인공 속마음",
-      "text": "군사, 재정, 결계.\n\n계속 숫자만 보고 있었는데, 그 숫자가 부족하면 제일 먼저 흔들리는 건 이런 일상이구나.",
+      "kind": "dialogue",
+      "speaker": "나",
+      "text": "그럼 지금 식량부터 확보해야겠네.",
       "backgroundId": "community_barley_field",
       "npcId": "farmer_marta",
       "npcName": "마르타",
       "emotion": "worried"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "마르타",
+      "text": "그것도 맞지만, 마력보리는 조금 특별하답니다.\n사람이 먹을 수도 있고, 팔아서 돈을 마련할 수도 있고, 결계에 필요한 마력을 보충하는 데도 쓸 수 있거든요.",
+      "backgroundId": "community_barley_field",
+      "npcId": "farmer_marta",
+      "npcName": "마르타",
+      "emotion": "neutral"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "나",
+      "text": "잠깐. 그럼 이거 완전 만능 작물 아니야?",
+      "backgroundId": "community_barley_field",
+      "npcId": "farmer_marta",
+      "npcName": "마르타",
+      "emotion": "neutral"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "마르타",
+      "text": "아이고, 만능이면 제가 진작 왕이 됐지요!\n보리가 자라는 데는 시간도 들고, 물도 일손도 부족해요. 어디에 얼마나 쓸지는 영주님이 정해 주셔야 해요.",
+      "backgroundId": "community_barley_field",
+      "npcId": "farmer_marta",
+      "npcName": "마르타",
+      "emotion": "smiling"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "나",
+      "text": "결국 한정된 자원으로 우선순위를 정해야 한다는 거네.",
+      "backgroundId": "community_barley_field",
+      "npcId": "farmer_marta",
+      "npcName": "마르타",
+      "emotion": "smiling"
+    },
+    {
+      "kind": "dialogue",
+      "speaker": "마르타",
+      "text": "맞아요! 그러니 오늘은 영주님도 소매 좀 걷어붙이세요!\n책상 위에서만 영지를 구할 순 없으니까요!",
+      "backgroundId": "community_barley_field",
+      "npcId": "farmer_marta",
+      "npcName": "마르타",
+      "emotion": "smiling"
+    },
+    {
+      "kind": "thought",
+      "speaker": "나",
+      "text": "(이세계에 와서도 자원 배분이라니. 이거 경영 시뮬레이션이었어?)",
+      "backgroundId": "community_barley_field",
+      "npcId": "farmer_marta",
+      "npcName": "마르타",
+      "emotion": "smiling"
     }
   ],
   "dialogueMinTurns": 2,

@@ -1,16 +1,17 @@
 extends Control
 
-const API_BASE := "http://127.0.0.1:5050"
+const DEFAULT_API_BASE := "http://127.0.0.1:5050"
 const SESSION_FILE := "user://last_session.cfg"
 const SMOKE_SESSION_FILE := "user://smoke_last_session.cfg"
 const LOADING_CUES_PATH := "res://data/dialogue_loading_cues.json"
-const DIALOGUE_PAGE_CHARACTER_LIMIT := 120
-const PASSIVE_DIALOGUE_PAGE_CHARACTER_LIMIT := 240
+const DIALOGUE_PAGE_CHARACTER_LIMIT := 90
+const PASSIVE_DIALOGUE_PAGE_CHARACTER_LIMIT := 150
 const STORY_PAGE_CHARACTER_LIMIT := 240
 const TYPEWRITER_CHARACTERS_PER_SECOND := 36.0
 const LOADING_CUE_DELAY_SECONDS := 0.65
 const LOADING_FOLLOWUP_DELAY_SECONDS := 5.0
 @onready var title_screen: VBoxContainer = $Page/TitleScreen
+@onready var background_music: AudioStreamPlayer = $BackgroundMusic
 @onready var page_background_image: TextureRect = $PageBackgroundImage
 @onready var page_background_shade: ColorRect = $PageBackgroundShade
 @onready var live_mode_toggle: CheckButton = $Page/TitleScreen/LiveModeToggle
@@ -57,33 +58,39 @@ const LOADING_FOLLOWUP_DELAY_SECONDS := 5.0
 	$GameScreen/ChoiceMargin/ChoiceBox/Content/Choices/Choice1,
 	$GameScreen/ChoiceMargin/ChoiceBox/Content/Choices/Choice2
 ]
-@onready var farming_screen: VBoxContainer = $Page/FarmingScreen
-@onready var farming_title: Label = $Page/FarmingScreen/Title
-@onready var farming_instructions: Label = $Page/FarmingScreen/Instructions
-@onready var farming_progress: Label = $Page/FarmingScreen/Progress
+@onready var farming_screen: Control = $FarmingScreen
+@onready var farming_title: Label = $FarmingScreen/Margin/Layout/Header/TitlePlate/Title
+@onready var farming_instructions: Label = $FarmingScreen/Margin/Layout/Header/Instructions
+@onready var farming_progress: Label = $FarmingScreen/Margin/Layout/Header/Progress
 @onready var obstacle_buttons: Array[Button] = [
-	$Page/FarmingScreen/Obstacles/Rock1,
-	$Page/FarmingScreen/Obstacles/Weed1,
-	$Page/FarmingScreen/Obstacles/Rock2
+	$FarmingScreen/Margin/Layout/MainArea/FieldArea/Obstacles/Rock1,
+	$FarmingScreen/Margin/Layout/MainArea/FieldArea/Obstacles/Weed1,
+	$FarmingScreen/Margin/Layout/MainArea/FieldArea/Obstacles/Rock2
 ]
 @onready var seed_buttons: Array[Button] = [
-	$Page/FarmingScreen/SeedCells/Seed0,
-	$Page/FarmingScreen/SeedCells/Seed1,
-	$Page/FarmingScreen/SeedCells/Seed2,
-	$Page/FarmingScreen/SeedCells/Seed3
+	$FarmingScreen/Margin/Layout/MainArea/FieldArea/SeedCells/Seed0,
+	$FarmingScreen/Margin/Layout/MainArea/FieldArea/SeedCells/Seed1,
+	$FarmingScreen/Margin/Layout/MainArea/FieldArea/SeedCells/Seed2,
+	$FarmingScreen/Margin/Layout/MainArea/FieldArea/SeedCells/Seed3
 ]
 @onready var water_buttons: Array[Button] = [
-	$Page/FarmingScreen/WaterChoices/Community,
-	$Page/FarmingScreen/WaterChoices/Ward,
-	$Page/FarmingScreen/WaterChoices/Market
+	$FarmingScreen/Margin/Layout/WorkbenchRow/WaterBench/Content/WaterChoices/Community,
+	$FarmingScreen/Margin/Layout/WorkbenchRow/WaterBench/Content/WaterChoices/Ward,
+	$FarmingScreen/Margin/Layout/WorkbenchRow/WaterBench/Content/WaterChoices/Market
 ]
 @onready var method_buttons: Array[Button] = [
-	$Page/FarmingScreen/MethodChoices/Manual,
-	$Page/FarmingScreen/MethodChoices/Magic,
-	$Page/FarmingScreen/MethodChoices/Tools
+	$FarmingScreen/Margin/Layout/WorkbenchRow/MethodBench/Content/MethodChoices/Manual,
+	$FarmingScreen/Margin/Layout/WorkbenchRow/MethodBench/Content/MethodChoices/Magic,
+	$FarmingScreen/Margin/Layout/WorkbenchRow/MethodBench/Content/MethodChoices/Tools
 ]
-@onready var farming_feedback: Label = $Page/FarmingScreen/Feedback
-@onready var farming_finish_button: Button = $Page/FarmingScreen/FinishButton
+@onready var farming_stage_panels: Array[PanelContainer] = [
+	$FarmingScreen/Margin/Layout/MainArea/StagePanel/Steps/Stage0,
+	$FarmingScreen/Margin/Layout/MainArea/StagePanel/Steps/Stage1,
+	$FarmingScreen/Margin/Layout/MainArea/StagePanel/Steps/Stage2,
+	$FarmingScreen/Margin/Layout/MainArea/StagePanel/Steps/Stage3
+]
+@onready var farming_feedback: Label = $FarmingScreen/Margin/Layout/CaptionPanel/Feedback
+@onready var farming_finish_button: Button = $FarmingScreen/Margin/Layout/FinishButton
 @onready var final_choice_screen: VBoxContainer = $Page/FinalChoiceScreen
 @onready var final_act_label: Label = $Page/FinalChoiceScreen/ActLabel
 @onready var final_narration: Label = $Page/FinalChoiceScreen/Narration
@@ -137,6 +144,8 @@ var removed_obstacle_indexes: Array[int] = []
 var planted_seed_indexes: Array[int] = []
 var water_target := "community"
 var farming_method := "manual"
+var water_choice_confirmed := false
+var method_choice_confirmed := false
 var smoke_test := false
 var smoke_timeout_test := false
 var smoke_save_test := false
@@ -151,6 +160,8 @@ var smoke_dialogue_ui_test := false
 var smoke_dialogue_layout_test := false
 var smoke_passive_dialogue_layout_test := false
 var smoke_story_layout_test := false
+var smoke_farming_layout_test := false
+var smoke_presentation_shell_test := false
 var smoke_loading_timing_test := false
 var smoke_button_assets_test := false
 var smoke_act1_opening_test := false
@@ -185,9 +196,15 @@ var last_loading_cue := ""
 var active_loading_cue := ""
 var loading_pulse_step := 0
 var last_story_background_id := ""
+var api_base := DEFAULT_API_BASE
 
 
 func _ready() -> void:
+	var music_stream := background_music.stream as AudioStreamMP3
+	if music_stream != null:
+		music_stream.loop = true
+	if DisplayServer.get_name() != "headless":
+		background_music.play()
 	_load_loading_cues()
 	typewriter_timer.wait_time = 1.0 / TYPEWRITER_CHARACTERS_PER_SECOND
 	loading_cue_timer.wait_time = LOADING_CUE_DELAY_SECONDS
@@ -224,6 +241,9 @@ func _ready() -> void:
 	loading_followup_timer.timeout.connect(_show_followup_loading_cue)
 	loading_pulse_timer.timeout.connect(_update_loading_pulse)
 	var arguments := OS.get_cmdline_user_args()
+	for argument in arguments:
+		if argument.begins_with("--api-base="):
+			api_base = argument.trim_prefix("--api-base=").trim_suffix("/")
 	smoke_timeout_test = "--smoke-timeout" in arguments
 	smoke_save_dialogue_test = "--smoke-save-dialogue" in arguments
 	smoke_save_choice_test = "--smoke-save-choice" in arguments
@@ -236,6 +256,8 @@ func _ready() -> void:
 	smoke_dialogue_layout_test = "--smoke-dialogue-layout" in arguments
 	smoke_passive_dialogue_layout_test = "--smoke-passive-dialogue-layout" in arguments
 	smoke_story_layout_test = "--smoke-story-layout" in arguments
+	smoke_farming_layout_test = "--smoke-farming-layout" in arguments
+	smoke_presentation_shell_test = "--smoke-presentation-shell" in arguments
 	smoke_loading_timing_test = "--smoke-loading-timing" in arguments
 	smoke_button_assets_test = "--smoke-button-assets" in arguments
 	smoke_act1_opening_test = "--smoke-act1-opening" in arguments
@@ -261,6 +283,12 @@ func _ready() -> void:
 	if smoke_story_layout_test:
 		call_deferred("_run_story_layout_smoke")
 		return
+	if smoke_farming_layout_test:
+		call_deferred("_run_farming_layout_smoke")
+		return
+	if smoke_presentation_shell_test:
+		call_deferred("_run_presentation_shell_smoke")
+		return
 	if smoke_loading_timing_test:
 		call_deferred("_run_loading_timing_smoke")
 		return
@@ -268,6 +296,7 @@ func _ready() -> void:
 		call_deferred("_run_button_assets_smoke")
 		return
 	_load_saved_session_reference()
+	_show_page_background("community_barley_field")
 	if smoke_act1_opening_test:
 		_start_new_game()
 		return
@@ -283,6 +312,11 @@ func _process(_delta: float) -> void:
 	var remaining := final_choice_timer.time_left
 	final_timer_label.text = "결정까지 %.1f초" % remaining
 	final_timer_bar.value = remaining
+
+
+func _exit_tree() -> void:
+	if background_music != null:
+		background_music.stop()
 
 
 func _start_new_game() -> void:
@@ -309,7 +343,7 @@ func _start_new_game() -> void:
 	send_button.show()
 	choices.hide()
 	title_screen.show()
-	_hide_page_background()
+	_show_page_background("community_barley_field")
 	game_screen.hide()
 	farming_screen.hide()
 	final_choice_screen.hide()
@@ -460,7 +494,7 @@ func _request_json(kind: String, method: HTTPClient.Method, path: String, payloa
 	request_kind = kind
 	var body := "" if method == HTTPClient.METHOD_GET else JSON.stringify(payload)
 	var headers := PackedStringArray(["Content-Type: application/json"])
-	var error := http_request.request(API_BASE + path, headers, method, body)
+	var error := http_request.request(api_base + path, headers, method, body)
 	if error != OK:
 		primary_request_active = false
 		if kind == "dialogue":
@@ -836,7 +870,7 @@ func _apply_history_input_state() -> void:
 	action_row.visible = expects_player_input or (viewing_latest and choice_action_available)
 	next_choices_button.visible = viewing_latest and choice_action_available
 	next_choices_button.disabled = not viewing_latest or dialogue_request_in_flight
-	status_label.visible = not decision_bridge_generated
+	status_label.visible = false
 	history_navigation_group.visible = not decision_bridge_generated
 	history_row.visible = not decision_bridge_generated or dialogue_page_row.visible
 	status_label.text = latest_status_text if viewing_latest else "이전 대화를 읽는 중입니다."
@@ -1223,13 +1257,16 @@ func _show_farming(payload: Dictionary, transition_feedback: String, saved_progr
 	farming_screen.show()
 	farming_title.text = payload.get("title", "마력보리 공동밭")
 	farming_instructions.text = payload.get("instructions", "")
-	farming_feedback.text = transition_feedback
+	farming_feedback.text = transition_feedback.replace("\n", " ").left(120) if not transition_feedback.is_empty() \
+		else "영주는 주민들과 같은 줄에 서서 밭을 살폈다."
 	removed_obstacles = 0
 	correct_seeds = 0
 	removed_obstacle_indexes.clear()
 	planted_seed_indexes.clear()
 	water_target = "community"
 	farming_method = "manual"
+	water_choice_confirmed = bool(saved_progress.get("waterChoiceConfirmed", false))
+	method_choice_confirmed = bool(saved_progress.get("methodChoiceConfirmed", false))
 	var obstacle_labels := ["돌 치우기", "잡초 뽑기", "돌 치우기"]
 	var seed_labels := ["비옥한 칸 A", "비옥한 칸 B", "비옥한 칸 C", "메마른 칸"]
 	for index in obstacle_buttons.size():
@@ -1239,30 +1276,29 @@ func _show_farming(payload: Dictionary, transition_feedback: String, saved_progr
 		seed_buttons[index].disabled = false
 		seed_buttons[index].text = seed_labels[index]
 	for index in water_buttons.size():
-		water_buttons[index].button_pressed = index == 0
+		water_buttons[index].button_pressed = false
 	for index in method_buttons.size():
-		method_buttons[index].button_pressed = index == 0
+		method_buttons[index].button_pressed = false
 	for value in saved_progress.get("removedObstacleIndexes", []):
 		var index := int(value)
 		if index >= 0 and index < obstacle_buttons.size():
 			removed_obstacle_indexes.append(index)
 			obstacle_buttons[index].disabled = true
-			obstacle_buttons[index].text = "정리 완료"
+			obstacle_buttons[index].text = "✓ 정리 완료"
 	for value in saved_progress.get("plantedSeedIndexes", []):
 		var index := int(value)
 		if index >= 0 and index < seed_buttons.size():
 			planted_seed_indexes.append(index)
 			seed_buttons[index].disabled = true
-			seed_buttons[index].text = "씨앗 배치 완료" if index < 3 else "싹트기 어려운 땅"
+			seed_buttons[index].text = "✓ 씨앗 배치" if index < 3 else "메마른 땅"
 	removed_obstacles = removed_obstacle_indexes.size()
 	correct_seeds = planted_seed_indexes.filter(func(index: int) -> bool: return index < 3).size()
 	var saved_water := str(saved_progress.get("waterTarget", "community"))
 	var saved_method := str(saved_progress.get("method", "manual"))
 	var water_index := ["community", "ward", "market"].find(saved_water)
 	var method_index := ["manual", "magic", "tools"].find(saved_method)
-	_select_water(0 if water_index < 0 else water_index, false)
-	_select_method(0 if method_index < 0 else method_index, false)
-	farming_finish_button.disabled = false
+	_select_water(0 if water_index < 0 else water_index, false, false)
+	_select_method(0 if method_index < 0 else method_index, false, false)
 	_update_farming_progress()
 	if smoke_save_test:
 		print("MOCK_SESSION_SAVE_READY: %s" % session_id)
@@ -1270,18 +1306,18 @@ func _show_farming(payload: Dictionary, transition_feedback: String, saved_progr
 		return
 	if smoke_save_farming_progress_test:
 		quit_after_checkpoint = true
-		_remove_obstacle(0)
-		_remove_obstacle(2)
+		for index in obstacle_buttons.size():
+			_remove_obstacle(index)
 		_plant_seed(0)
-		_plant_seed(3)
-		_select_water(2)
-		_select_method(2)
+		_plant_seed(1)
 		return
 	if smoke_resume_test and not saved_progress.is_empty():
 		print("MOCK_FARMING_PROGRESS_RESUMED: %s" % JSON.stringify(saved_progress))
 	if smoke_test:
 		for index in obstacle_buttons.size(): _remove_obstacle(index)
 		for index in 3: _plant_seed(index)
+		_select_water(0)
+		_select_method(0)
 		_submit_farming()
 
 
@@ -1289,9 +1325,10 @@ func _remove_obstacle(index: int) -> void:
 	if obstacle_buttons[index].disabled:
 		return
 	obstacle_buttons[index].disabled = true
-	obstacle_buttons[index].text = "정리 완료"
+	obstacle_buttons[index].text = "✓ 정리 완료"
 	removed_obstacles += 1
 	removed_obstacle_indexes.append(index)
+	farming_feedback.text = "돌과 잡초를 걷어 내자 묻혀 있던 밭고랑이 모습을 드러냈다."
 	_update_farming_progress()
 	_queue_farming_checkpoint()
 
@@ -1302,37 +1339,95 @@ func _plant_seed(index: int) -> void:
 	seed_buttons[index].disabled = true
 	planted_seed_indexes.append(index)
 	if index < 3:
-		seed_buttons[index].text = "씨앗 배치 완료"
+		seed_buttons[index].text = "✓ 씨앗 배치"
 		correct_seeds += 1
+		farming_feedback.text = "비옥한 흙에 마력보리 씨앗을 심었다. 작은 빛이 흙 사이로 번졌다."
 	else:
-		seed_buttons[index].text = "싹트기 어려운 땅"
+		seed_buttons[index].text = "메마른 땅"
+		farming_feedback.text = "흙이 너무 말라 있다. 이 밭고랑에서는 씨앗이 버티기 어렵겠다."
 	_update_farming_progress()
 	_queue_farming_checkpoint()
 
 
-func _select_water(index: int, save_checkpoint := true) -> void:
+func _select_water(index: int, save_checkpoint := true, confirm_choice := true) -> void:
 	var targets := ["community", "ward", "market"]
 	water_target = targets[index]
+	if confirm_choice:
+		water_choice_confirmed = true
 	for button_index in water_buttons.size():
-		water_buttons[button_index].button_pressed = button_index == index
+		water_buttons[button_index].button_pressed = water_choice_confirmed and button_index == index
+	if confirm_choice:
+		var captions := [
+			"남은 물을 주민 공동밭에 나누기로 했다. 오늘의 식탁을 먼저 지킨다.",
+			"남은 물을 결계핵 동력밭에 모았다. 비상 마력을 조금이라도 더 비축한다.",
+			"판매용 밭에 물을 집중했다. 겨울을 버틸 영지 수입도 필요하다."
+		]
+		farming_feedback.text = captions[index]
+	_update_farming_progress()
 	if save_checkpoint:
 		_queue_farming_checkpoint()
 
 
-func _select_method(index: int, save_checkpoint := true) -> void:
+func _select_method(index: int, save_checkpoint := true, confirm_choice := true) -> void:
 	var methods := ["manual", "magic", "tools"]
 	farming_method = methods[index]
+	if confirm_choice:
+		method_choice_confirmed = true
 	for button_index in method_buttons.size():
-		method_buttons[button_index].button_pressed = button_index == index
+		method_buttons[button_index].button_pressed = method_choice_confirmed and button_index == index
+	if confirm_choice:
+		var captions := [
+			"영주는 주민들과 같은 줄에 서서 쟁기를 들었다.",
+			"푸른 마력이 밭고랑을 따라 흐르며 일손을 보탰다.",
+			"개량 도구를 고르자 주민들의 작업 속도가 눈에 띄게 빨라졌다."
+		]
+		farming_feedback.text = captions[index]
+	_update_farming_progress()
 	if save_checkpoint:
 		_queue_farming_checkpoint()
 
 
 func _update_farming_progress() -> void:
 	farming_progress.text = "장애물 %d/3 · 올바른 씨앗 %d/3" % [removed_obstacles, correct_seeds]
+	var active_stage := 0 if removed_obstacles < 3 else 1 if correct_seeds < 3 \
+		else 2 if not water_choice_confirmed else 3 if not method_choice_confirmed else 4
+	var stage_names := ["밭 정리", "씨앗 배치", "남은 물 배분", "작업 방식"]
+	for index in farming_stage_panels.size():
+		var completed := index < active_stage or active_stage == 4
+		var current := index == active_stage
+		var label := farming_stage_panels[index].get_node("Label") as Label
+		label.text = "%s  %s" % ["✓" if completed else "▶" if current else str(index + 1), stage_names[index]]
+		label.add_theme_color_override("font_color", Color("d9f0c0") if completed \
+			else Color("ffe29a") if current else Color("d8c8ad"))
+		farming_stage_panels[index].add_theme_stylebox_override("panel",
+			_farming_stage_style(completed, current))
+	for index in obstacle_buttons.size():
+		obstacle_buttons[index].disabled = removed_obstacle_indexes.has(index)
+	for index in seed_buttons.size():
+		seed_buttons[index].disabled = planted_seed_indexes.has(index) or active_stage < 1
+	for button in water_buttons:
+		button.disabled = active_stage < 2
+	for button in method_buttons:
+		button.disabled = active_stage < 3
+	farming_finish_button.disabled = active_stage < 4
+	if active_stage == 4:
+		farming_feedback.text = "모든 준비가 끝났다. 이제 이 밭의 수확이 영지의 겨울과 결계를 함께 받칠 것이다."
+
+
+func _farming_stage_style(completed: bool, current: bool) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("385132cc") if completed else Color("5a3518e8") if current else Color("24170dcc")
+	style.border_color = Color("9ed270") if completed else Color("f2bd46") if current else Color("74502b")
+	style.set_border_width_all(2 if completed or current else 1)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 10.0
+	style.content_margin_right = 8.0
+	return style
 
 
 func _submit_farming() -> void:
+	if farming_finish_button.disabled:
+		return
 	checkpoint_dirty = false
 	if checkpoint_request_active:
 		checkpoint_request.cancel_request()
@@ -1365,9 +1460,11 @@ func _flush_farming_checkpoint() -> void:
 		"plantedSeedIndexes": planted_seed_indexes,
 		"waterTarget": water_target,
 		"method": farming_method,
+		"waterChoiceConfirmed": water_choice_confirmed,
+		"methodChoiceConfirmed": method_choice_confirmed,
 		"idempotencyKey": _new_uuid()
 	}
-	var error := checkpoint_request.request(API_BASE + "/api/v1/sessions/%s/farming-progress" % session_id,
+	var error := checkpoint_request.request(api_base + "/api/v1/sessions/%s/farming-progress" % session_id,
 		PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST, JSON.stringify(payload))
 	if error != OK:
 		checkpoint_request_active = false
@@ -1395,7 +1492,7 @@ func _show_farming_result(payload: Dictionary) -> void:
 
 
 func _show_ending(payload: Dictionary) -> void:
-	_hide_page_background()
+	_show_page_background("community_barley_field")
 	var ending: Dictionary = payload.get("ending", {})
 	var ending_records: Array = ending.get("records", [])
 	occupation.text = ending.get("occupationName", "")
@@ -1666,13 +1763,13 @@ func _run_story_layout_smoke() -> void:
 	var box_rect := story_box.get_global_rect()
 	var text_rect := story_text.get_global_rect()
 	var button_rect := story_continue_button.get_global_rect()
-	var badge_valid := speaker_rect.size == Vector2(220.0, 70.0)
-	var fixed_shell_height := is_equal_approx(story_shell.size.y, 324.0)
+	var badge_valid := speaker_rect.size == Vector2(220.0, 52.0)
+	var fixed_shell_height := is_equal_approx(story_shell.size.y, 180.0)
 	var text_safe := text_rect.position.x >= box_rect.position.x + 28.0 \
 		and text_rect.position.y >= speaker_rect.end.y + 12.0 \
 		and text_rect.end.x <= box_rect.end.x - 28.0
-	var button_valid := button_rect.size.x >= 180.0 and button_rect.size.x <= 240.0 \
-		and button_rect.size.y >= 48.0 and button_rect.size.y <= 60.0 \
+	var button_valid := button_rect.size.x >= 160.0 and button_rect.size.x <= 200.0 \
+		and button_rect.size.y >= 40.0 and button_rect.size.y <= 48.0 \
 		and story_continue_button.get_theme_color("font_color") == Color.WHITE
 	var header_hidden: bool = not ($GameScreen/SceneHeader as Control).visible
 	var speaker_normalization_valid := story_speaker.text == "나" \
@@ -1740,8 +1837,9 @@ func _run_passive_dialogue_layout_smoke() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var body_rect := dialogue_viewport.get_global_rect()
-	var passive_uses_space := not history_row.visible and action_row.visible \
-		and body_rect.size.y >= 120.0 and dialogue_pages.size() == 1
+	var passive_uses_space := action_row.visible and body_rect.size.y >= 40.0 \
+		and dialogue_pages.size() <= 2 \
+		and history_row.visible == (dialogue_pages.size() > 1)
 	var choice_enabled := next_choices_button.visible and not next_choices_button.disabled
 	var screenshot_path := "/tmp/media-project-passive-dialogue-after.png"
 	var screenshot_error := OK
@@ -1759,8 +1857,9 @@ func _run_passive_dialogue_layout_smoke() -> void:
 		])
 		get_tree().quit()
 		return
-	push_error("비입력 대화 레이아웃 검증에 실패했습니다: space=%s choice=%s pages=%d" % [
-		passive_uses_space, choice_enabled, dialogue_pages.size()
+	push_error("비입력 대화 레이아웃 검증에 실패했습니다: space=%s choice=%s pages=%d body=%s history=%s action=%s" % [
+		passive_uses_space, choice_enabled, dialogue_pages.size(), body_rect,
+		history_row.visible, action_row.visible
 	])
 	get_tree().quit(1)
 
@@ -1802,8 +1901,8 @@ func _run_dialogue_layout_smoke() -> void:
 	var history_rect := history_row.get_global_rect()
 	var button_rect := send_button.get_global_rect()
 	var nav_rect := ($GameScreen/DialogueMargin/DialogueShell/DialogueBox/SafeArea/Content/HistoryRow/NavigationGroup as Control).get_global_rect()
-	var name_size_valid := name_rect.size.x >= 180.0 and name_rect.size.x <= 260.0 \
-		and name_rect.size.y >= 66.0 and name_rect.size.y <= 74.0
+	var name_size_valid := name_rect.size.x >= 170.0 and name_rect.size.x <= 220.0 \
+		and name_rect.size.y >= 48.0 and name_rect.size.y <= 56.0
 	var name_font := npc_name.get_theme_font("font")
 	var name_font_size := npc_name.get_theme_font_size("font_size")
 	var longer_name_fits := name_font.get_string_size("수석 마법사 리아", HORIZONTAL_ALIGNMENT_LEFT, -1, name_font_size).x \
@@ -1812,12 +1911,12 @@ func _run_dialogue_layout_smoke() -> void:
 		and body_rect.end.x <= box_rect.end.x - 28.0 \
 		and body_rect.position.y >= name_rect.end.y
 	var action_valid := input_rect.end.x + 8.0 <= button_rect.position.x \
-		and button_rect.size.x >= 180.0 and button_rect.size.x <= 240.0 \
-		and button_rect.size.y >= 48.0 and button_rect.size.y <= 60.0
+		and button_rect.size.x >= 160.0 and button_rect.size.x <= 200.0 \
+		and button_rect.size.y >= 40.0 and button_rect.size.y <= 48.0
 	var navigation_separate := history_rect.position.y >= action_rect.end.y \
-		and nav_rect.position.x >= box_rect.position.x + 128.0 \
-		and nav_rect.end.x <= box_rect.end.x - 128.0
-	var fixed_shell_height := is_equal_approx(shell.size.y, 324.0)
+		and nav_rect.position.x >= box_rect.position.x + 48.0 \
+		and nav_rect.end.x <= box_rect.end.x - 48.0
+	var fixed_shell_height := is_equal_approx(shell.size.y, 180.0)
 	var body_size_before := body_rect.size
 	var sample_dialogues := [
 		"한 줄 대사입니다.",
@@ -1850,10 +1949,121 @@ func _run_dialogue_layout_smoke() -> void:
 		])
 		get_tree().quit()
 		return
-	push_error("대화창 A/B/C/D 레이아웃 검증에 실패했습니다: name=%s long_name=%s body=%s text=%s action=%s nav=%s fixed=%s" % [
+	push_error("대화창 A/B/C/D 레이아웃 검증에 실패했습니다: name=%s long_name=%s body=%s text=%s action=%s nav=%s fixed=%s rects=%s/%s/%s/%s" % [
 		name_size_valid, longer_name_fits, body_safe, text_heights_stable, action_valid,
-		navigation_separate, fixed_shell_height
+		navigation_separate, fixed_shell_height, body_rect, action_rect, history_rect, nav_rect
 	])
+	get_tree().quit(1)
+
+
+func _run_farming_layout_smoke() -> void:
+	title_screen.hide()
+	game_screen.hide()
+	ending_screen.hide()
+	_show_farming({
+		"title": "마력보리 공동밭",
+		"instructions": "돌과 잡초를 치우고 씨앗을 배치한 뒤, 남은 물과 작업 방식을 정하세요."
+	}, "")
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var root_rect := farming_screen.get_global_rect()
+	var initial_valid := root_rect.size == Vector2(960.0, 540.0) \
+		and farming_finish_button.disabled \
+		and (farming_stage_panels[0].get_node("Label") as Label).text.begins_with("▶")
+	var targets_valid := true
+	for button in obstacle_buttons + seed_buttons + water_buttons + method_buttons:
+		targets_valid = targets_valid and button.size.x >= 120.0 and button.size.y >= 60.0 \
+			and button.icon != null
+	var initial_screenshot := "/tmp/media-project-farming-redesign-initial.png"
+	var initial_error := OK
+	if DisplayServer.get_name() == "headless":
+		initial_screenshot = "headless-dummy-renderer"
+	else:
+		initial_error = _save_viewport_png(initial_screenshot)
+
+	for index in obstacle_buttons.size():
+		_remove_obstacle(index)
+	for index in 3:
+		_plant_seed(index)
+	_select_water(1)
+	_select_method(2)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var stages_complete := true
+	for panel in farming_stage_panels:
+		stages_complete = stages_complete and (panel.get_node("Label") as Label).text.begins_with("✓")
+	var completed_valid := not farming_finish_button.disabled \
+		and farming_progress.text == "장애물 3/3 · 올바른 씨앗 3/3" \
+		and water_buttons[1].button_pressed and method_buttons[2].button_pressed \
+		and stages_complete
+	var completed_screenshot := "/tmp/media-project-farming-redesign-completed.png"
+	var completed_error := OK
+	if DisplayServer.get_name() == "headless":
+		completed_screenshot = "headless-dummy-renderer"
+	else:
+		completed_error = _save_viewport_png(completed_screenshot)
+	if initial_valid and targets_valid and completed_valid \
+		and initial_error == OK and completed_error == OK:
+		print("MOCK_FARMING_LAYOUT_OK: root=%s initial=%s completed=%s" % [
+			root_rect, initial_screenshot, completed_screenshot
+		])
+		get_tree().quit()
+		return
+	push_error("농사 미니게임 레이아웃 검증에 실패했습니다: initial=%s targets=%s completed=%s" % [
+		initial_valid, targets_valid, completed_valid
+	])
+	get_tree().quit(1)
+
+
+func _run_presentation_shell_smoke() -> void:
+	_show_page_background("community_barley_field")
+	title_screen.show()
+	game_screen.hide()
+	farming_screen.hide()
+	final_choice_screen.hide()
+	ending_screen.hide()
+	await get_tree().process_frame
+	var expected_background := load("res://assets/backgrounds/community_barley_field.png") as Texture2D
+	var music_stream := background_music.stream as AudioStreamMP3
+	var title_valid := page_background_image.visible and page_background_shade.visible \
+		and page_background_image.texture == expected_background
+	var name_font_valid := npc_name.get_theme_font_size("font_size") == 16 \
+		and story_speaker.get_theme_font_size("font_size") == 16
+	var music_valid := music_stream != null and music_stream.loop \
+		and (DisplayServer.get_name() == "headless" or background_music.playing)
+
+	title_screen.hide()
+	_show_ending({
+		"feedback": "",
+		"ending": {
+			"occupationName": "북부 결계술사",
+			"title": "대결계 마법진을 완성한 자",
+			"careerRank": "accomplished",
+			"endingTone": "orthodox",
+			"territoryOutcome": "영지는 살아남았다.",
+			"epilogue": "공동밭에는 다시 마력보리가 자랐다.",
+			"records": ["마력보리 공동밭을 지켰다."],
+			"shareLine": "북부의 저녁은 오래도록 평온했다."
+		}
+	})
+	await get_tree().process_frame
+	var ending_header_hidden := not ($Page/EndingScreen/Content/Header as Label).visible
+	var career_summary_hidden := not career_summary.visible
+	var ending_valid := ending_screen.visible and page_background_image.visible \
+		and page_background_image.texture == expected_background \
+		and ending_header_hidden and career_summary_hidden \
+		and (DisplayServer.get_name() == "headless" or background_music.playing)
+	if title_valid and ending_valid and name_font_valid and music_valid:
+		print("MOCK_PRESENTATION_SHELL_OK: title_background=field ending_background=field ending_auxiliary_labels=hidden name_font=16 music_loop=true")
+		background_music.stop()
+		get_tree().quit()
+		return
+	push_error("타이틀·엔딩 배경 및 음악 검증 실패: title=%s ending=%s font=%s music=%s" % [
+		title_valid, ending_valid, name_font_valid, music_valid
+	])
+	background_music.stop()
 	get_tree().quit(1)
 
 
@@ -1915,17 +2125,25 @@ func _run_button_assets_smoke() -> void:
 		if max_x >= min_x and max_y >= min_y:
 			alpha_bounds = Rect2i(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
 	var button_rect := new_game_button.get_global_rect()
-	var source_ratio := float(image.get_width()) / float(image.get_height()) if image != null else 0.0
-	var rendered_ratio := button_rect.size.x / button_rect.size.y
-	var style_states_valid := true
+	var primary_normal := new_game_button.get_theme_stylebox("normal") as StyleBoxTexture
+	var style_states_valid := primary_normal != null
 	for state_name in ["normal", "hover", "pressed", "disabled"]:
 		var state_style := new_game_button.get_theme_stylebox(state_name) as StyleBoxTexture
 		style_states_valid = style_states_valid and state_style != null \
-			and state_style.region_rect == Rect2(0, 0, 600, 130) \
-			and is_equal_approx(state_style.texture_margin_left, 70.0) \
-			and is_equal_approx(state_style.texture_margin_top, 24.0) \
-			and is_equal_approx(state_style.texture_margin_right, 70.0) \
-			and is_equal_approx(state_style.texture_margin_bottom, 24.0)
+			and _stylebox_texture_geometry_matches(primary_normal, state_style, true)
+	var choice_states_valid := true
+	for state_name in ["normal", "hover", "pressed", "disabled"]:
+		var choice_style := choice_buttons[0].get_theme_stylebox(state_name) as StyleBoxTexture
+		choice_states_valid = choice_states_valid and choice_style != null \
+			and _stylebox_texture_geometry_matches(primary_normal, choice_style, true)
+	var name_style := npc_name.get_theme_stylebox("normal") as StyleBoxTexture
+	var compact_name_style := get_theme().get_stylebox("normal", "CompactNamePlate") as StyleBoxTexture
+	var name_styles_valid := name_style != null and compact_name_style != null \
+		and _stylebox_texture_geometry_matches(name_style, compact_name_style, false)
+	var dialogue_style := $GameScreen/DialogueMargin/DialogueShell/DialogueBox.get_theme_stylebox("panel") as StyleBoxTexture
+	var generic_panel_style := get_theme().get_stylebox("panel", "PanelContainer") as StyleBoxTexture
+	var panel_styles_valid := dialogue_style != null and generic_panel_style != null \
+		and _stylebox_texture_geometry_matches(dialogue_style, generic_panel_style, false)
 	var screenshot_path := "/tmp/media-project-button-assets.png"
 	var screenshot_error := OK
 	if DisplayServer.get_name() != "headless":
@@ -1936,17 +2154,39 @@ func _run_button_assets_smoke() -> void:
 			screenshot_error = viewport_image.save_png(screenshot_path)
 	else:
 		screenshot_path = "headless-dummy-renderer"
-	if image != null and image.get_size() == Vector2i(600, 130) \
+	if image != null and image.get_size() == Vector2i(2172, 724) \
 		and alpha_bounds.size.x > 0 and alpha_bounds.size.y > 0 \
-		and absf(source_ratio - rendered_ratio) <= 0.05 and style_states_valid \
+		and button_rect.size == Vector2(300.0, 65.0) and style_states_valid \
+		and choice_states_valid and name_styles_valid and panel_styles_valid \
 		and screenshot_error == OK:
-		print("MOCK_BUTTON_ASSETS_OK: source=%s alpha=%s source_ratio=%.3f rendered=%s rendered_ratio=%.3f screenshot=%s" % [
-			image.get_size(), alpha_bounds, source_ratio, button_rect, rendered_ratio, screenshot_path
+		print("MOCK_BUTTON_ASSETS_OK: source=%s alpha=%s rendered=%s primary=%s choice=%s name=%s panel=%s screenshot=%s" % [
+			image.get_size(), alpha_bounds, button_rect, style_states_valid, choice_states_valid,
+			name_styles_valid, panel_styles_valid, screenshot_path
 		])
 		get_tree().quit()
 		return
-	push_error("버튼 에셋 측정에 실패했습니다.")
+	push_error("공통 UI 에셋 검증에 실패했습니다: primary=%s choice=%s name=%s panel=%s" % [
+		style_states_valid, choice_states_valid, name_styles_valid, panel_styles_valid
+	])
 	get_tree().quit(1)
+
+
+func _stylebox_texture_geometry_matches(reference: StyleBoxTexture, candidate: StyleBoxTexture,
+		include_content_margins: bool) -> bool:
+	var matches := reference.texture == candidate.texture \
+		and reference.region_rect == candidate.region_rect \
+		and is_equal_approx(reference.texture_margin_left, candidate.texture_margin_left) \
+		and is_equal_approx(reference.texture_margin_top, candidate.texture_margin_top) \
+		and is_equal_approx(reference.texture_margin_right, candidate.texture_margin_right) \
+		and is_equal_approx(reference.texture_margin_bottom, candidate.texture_margin_bottom) \
+		and reference.axis_stretch_horizontal == candidate.axis_stretch_horizontal \
+		and reference.axis_stretch_vertical == candidate.axis_stretch_vertical
+	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
+		matches = matches and is_equal_approx(reference.get_expand_margin(side), candidate.get_expand_margin(side))
+	if include_content_margins:
+		for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
+			matches = matches and is_equal_approx(reference.get_content_margin(side), candidate.get_content_margin(side))
+	return matches
 
 
 func _run_act1_opening_smoke() -> void:

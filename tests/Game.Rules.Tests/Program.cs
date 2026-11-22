@@ -211,13 +211,14 @@ static async Task<TestResult> RunDecisionBridgeGuardAsync(MockGameContent conten
 
 static async Task<TestResult> RunStoryBeatContractAsync(MockGameContent content)
 {
-    const string expected = "Act1 6장면/기억 없음/붉은 하늘/자유 대화 연결/Act4 전조와 최종 명령";
+    const string expected = "Act1 6장면/Act3 농사 목적 도입/Act4 전조와 최종 명령";
     try
     {
         await using var fixture = await GameFixture.CreateAsync(content);
         var start = await fixture.Service.StartSessionAsync("mock");
         var act1Beats = start.Scene.StoryBeats ?? [];
         var act4 = content.GetAct(4);
+        var act3Beats = content.GetAct(3).StoryBeats ?? [];
         var act4Beats = act4.StoryBeats ?? [];
         var finaleBeats = act4.FinaleBeats ?? [];
         var passed = act1Beats.Count >= 25
@@ -227,13 +228,17 @@ static async Task<TestResult> RunStoryBeatContractAsync(MockGameContent content)
             && act1Beats.Any(beat => beat.Text.Contains("3년 뒤")
                 && beat.BackgroundId == "cracked_sky_castle_wall")
             && act1Beats.Any(beat => beat.Text.Contains("결정하기 전에 몇 가지부터 확인"))
+            && act3Beats.Count >= 10
+            && act3Beats.Any(beat => beat.Text.Contains("밥줄이죠"))
+            && act3Beats.Any(beat => beat.Text.Contains("만능이면 제가 진작 왕이 됐지요"))
+            && act3Beats.Any(beat => beat.Text.Contains("경영 시뮬레이션"))
             && act4Beats.Any(beat => beat.Text.Contains("7일 뒤"))
             && finaleBeats.Any(beat => beat.BackgroundId == "cracked_sky_castle_wall")
             && finaleBeats.Any(beat => beat.Text.Contains("최종 명령"));
-        var actual = passed ? expected : $"Act1 {act1Beats.Count}/Act4 {act4Beats.Count}/Finale {finaleBeats.Count}";
+        var actual = passed ? expected : $"Act1 {act1Beats.Count}/Act3 {act3Beats.Count}/Act4 {act4Beats.Count}/Finale {finaleBeats.Count}";
         return new TestResult("확정 스토리 비트 계약", expected, actual,
-            $"도입 {act1Beats.Count}개/전조 {act4Beats.Count}개/최종 {finaleBeats.Count}개", passed,
-            passed ? null : "프롤로그, 균열 전조 또는 최종 명령 장면이 API 콘텐츠에서 누락됐습니다.");
+            $"Act1 {act1Beats.Count}개/Act3 {act3Beats.Count}개/전조 {act4Beats.Count}개/최종 {finaleBeats.Count}개", passed,
+            passed ? null : "프롤로그, 농사 목적 도입, 균열 전조 또는 최종 명령 장면이 API 콘텐츠에서 누락됐습니다.");
     }
     catch (Exception error)
     {
@@ -645,7 +650,8 @@ static async Task<TestResult> RunFarmingProgressRecoveryAsync(MockGameContent co
             $"장애물 {string.Join(',', progress.RemovedObstacleIndexes)}/씨앗 {string.Join(',', progress.PlantedSeedIndexes)}/{progress.WaterTarget}/{progress.Method}";
         var checkpointCount = await fixture.Database.GameEvents.CountAsync(gameEvent =>
             gameEvent.SessionId == sessionId && gameEvent.EventType == "FarmingProgressSaved");
-        var passed = actual == expected && snapshot.Phase == "AwaitingFarming" && checkpointCount == 1;
+        var passed = actual == expected && progress is { WaterChoiceConfirmed: true, MethodChoiceConfirmed: true }
+            && snapshot.Phase == "AwaitingFarming" && checkpointCount == 1;
         return new TestResult("농사 중간 복구", expected, actual, $"체크포인트 {checkpointCount}개", passed,
             passed ? null : "농사 진행 체크포인트가 정확히 복구되지 않았습니다.");
     }
