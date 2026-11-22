@@ -12,6 +12,14 @@ public sealed record DialogueRequest(string NpcId, string Text, string Idempoten
 public sealed record DialogueResponse(string Dialogue, string Emotion, string Feedback, IReadOnlyList<string> AcceptedTags,
     string CareerFeedback, int DialogueRemaining, bool ChoicesAvailable, string ResponseSource = "mock",
     bool FallbackUsed = false, int AttemptCount = 1);
+public sealed record DialogueHistoryEntryResponse(int Sequence, int Act, string PlayerText, string NpcDialogue,
+    string Emotion, bool IsOpening, DateTimeOffset CreatedAt);
+public sealed record DialogueHistoryResponse(int Act, IReadOnlyList<DialogueHistoryEntryResponse> Records);
+public sealed record DialogueDiagnosticEventResponse(int Sequence, int Act, string PlayerText, string NpcDialogue,
+    string Emotion, string Feedback, string CareerFeedback, IReadOnlyList<string> AcceptedTags,
+    string ResponseSource, bool FallbackUsed, int AttemptCount, DateTimeOffset CreatedAt);
+public sealed record DialogueDiagnosticsResponse(Guid SessionId, int Act,
+    IReadOnlyList<DialogueDiagnosticEventResponse> Events);
 public sealed record DecisionBridgeRequest(string IdempotencyKey);
 public sealed record DecisionBridgeResponse(string Dialogue, string Emotion, bool ChoicesAvailable = true,
     string ResponseSource = "mock", bool FallbackUsed = false, int AttemptCount = 1,

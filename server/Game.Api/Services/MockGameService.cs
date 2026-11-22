@@ -65,6 +65,41 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
             currentDialogue, nextActivity, farmingProgress, dialogueRemaining, choicesAvailable);
     }
 
+    public async Task<DialogueHistoryResponse> GetDialogueHistoryAsync(Guid sessionId)
+    {
+        var session = await FindSessionAsync(sessionId);
+        if (session.Phase is not ("AwaitingDialogue" or "AwaitingChoice" or "AwaitingFarming" or "Completed"))
+            throw new GameRuleException("DIALOGUE_HISTORY_UNAVAILABLE", "현재 세션 상태에서는 대화 기록을 확인할 수 없습니다.");
+
+        var act = content.GetAct(session.CurrentAct);
+        var dialogueEvents = await database.GameEvents
+            .Where(candidate => candidate.SessionId == sessionId
+                && candidate.EventType == "DialogueGenerated" && candidate.Act == session.CurrentAct)
+            .OrderBy(candidate => candidate.Sequence)
+            .ToArrayAsync();
+        var openingCreatedAt = dialogueEvents.FirstOrDefault()?.CreatedAt ?? session.UpdatedAt;
+        var records = new List<DialogueHistoryEntryResponse>
+        {
+            new(0, session.CurrentAct, "", act.Scene.OpeningDialogue, act.Scene.NpcEmotion, true, openingCreatedAt)
+        };
+        records.AddRange(dialogueEvents.Select(ToDialogueHistoryEntry));
+        return new DialogueHistoryResponse(session.CurrentAct, records);
+    }
+
+    public async Task<DialogueDiagnosticsResponse> GetDialogueDiagnosticsAsync(Guid sessionId, int? act = null)
+    {
+        var session = await FindSessionAsync(sessionId);
+        var requestedAct = act ?? session.CurrentAct;
+        _ = content.GetAct(requestedAct);
+        var dialogueEvents = await database.GameEvents
+            .Where(candidate => candidate.SessionId == sessionId
+                && candidate.EventType == "DialogueGenerated" && candidate.Act == requestedAct)
+            .OrderBy(candidate => candidate.Sequence)
+            .ToArrayAsync();
+        return new DialogueDiagnosticsResponse(sessionId, requestedAct,
+            dialogueEvents.Select(ToDialogueDiagnosticEvent).ToArray());
+    }
+
     public async Task<DialogueResponse> SubmitDialogueAsync(Guid sessionId, DialogueRequest request)
     {
         ValidateIdempotencyKey(request.IdempotencyKey);
@@ -357,6 +392,41 @@ public sealed class MockGameService(GameDbContext database, MockGameContent cont
         var npcDialogue = root.TryGetProperty("dialogue", out var dialogue) ? dialogue.GetString() ?? "" : "";
         return new PreviousDialogueTurn(playerText, npcDialogue);
     }
+
+    private static DialogueHistoryEntryResponse ToDialogueHistoryEntry(GameEvent gameEvent)
+    {
+        using var document = JsonDocument.Parse(gameEvent.PayloadJson);
+        var root = document.RootElement;
+        return new DialogueHistoryEntryResponse(gameEvent.Sequence, gameEvent.Act,
+            ReadString(root, "playerText"), ReadString(root, "dialogue"), ReadString(root, "emotion", "neutral"),
+            false, gameEvent.CreatedAt);
+    }
+
+    private static DialogueDiagnosticEventResponse ToDialogueDiagnosticEvent(GameEvent gameEvent)
+    {
+        using var document = JsonDocument.Parse(gameEvent.PayloadJson);
+        var root = document.RootElement;
+        var acceptedTags = root.TryGetProperty("acceptedTags", out var tags) && tags.ValueKind == JsonValueKind.Array
+            ? tags.EnumerateArray().Select(tag => tag.GetString() ?? "").Where(tag => tag.Length > 0).ToArray()
+            : [];
+        return new DialogueDiagnosticEventResponse(gameEvent.Sequence, gameEvent.Act,
+            ReadString(root, "playerText"), ReadString(root, "dialogue"), ReadString(root, "emotion", "neutral"),
+            ReadString(root, "feedback"), ReadString(root, "careerFeedback"), acceptedTags,
+            ReadString(root, "responseSource", "unknown"), ReadBoolean(root, "fallbackUsed"),
+            ReadInteger(root, "attemptCount", 1), gameEvent.CreatedAt);
+    }
+
+    private static string ReadString(JsonElement root, string propertyName, string fallback = "") =>
+        root.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString() ?? fallback
+            : fallback;
+
+    private static bool ReadBoolean(JsonElement root, string propertyName) =>
+        root.TryGetProperty(propertyName, out var property) && property.ValueKind is JsonValueKind.True or JsonValueKind.False
+            && property.GetBoolean();
+
+    private static int ReadInteger(JsonElement root, string propertyName, int fallback) =>
+        root.TryGetProperty(propertyName, out var property) && property.TryGetInt32(out var value) ? value : fallback;
 
     private async Task<FinalChoiceTimerEvent?> GetFinalChoiceTimerAsync(Guid sessionId, MockActContent act, bool startIfMissing)
     {

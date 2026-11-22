@@ -49,10 +49,21 @@ using (var scope = app.Services.CreateScope())
 app.MapGet("/health", async (GameDbContext database) => Results.Ok(new HealthResponse(
     "ok", "game-api", "0.2.0", await database.Database.CanConnectAsync())));
 app.MapGet("/api/v1/diagnostics/live-api", (LiveApiMetrics metrics) => Results.Ok(metrics.Snapshot()));
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/api/v1/diagnostics/sessions/{sessionId:guid}/dialogue-events",
+        async (Guid sessionId, HttpContext context, MockGameService game) =>
+        {
+            int? act = int.TryParse(context.Request.Query["act"], out var parsedAct) ? parsedAct : null;
+            return Results.Ok(await game.GetDialogueDiagnosticsAsync(sessionId, act));
+        });
+}
 app.MapPost("/api/v1/sessions", async (SessionStartRequest request, MockGameService game) =>
     Results.Ok(await game.StartSessionAsync(request.Mode, request.FailureScenario)));
 app.MapGet("/api/v1/sessions/{sessionId:guid}", async (Guid sessionId, MockGameService game) =>
     Results.Ok(await game.GetSessionAsync(sessionId)));
+app.MapGet("/api/v1/sessions/{sessionId:guid}/dialogue-history", async (Guid sessionId, MockGameService game) =>
+    Results.Ok(await game.GetDialogueHistoryAsync(sessionId)));
 app.MapPost("/api/v1/sessions/{sessionId:guid}/dialogues", async (Guid sessionId, DialogueRequest request, MockGameService game) =>
     Results.Ok(await game.SubmitDialogueAsync(sessionId, request)));
 app.MapPost("/api/v1/sessions/{sessionId:guid}/decision-bridge", async (Guid sessionId, DecisionBridgeRequest request, MockGameService game) =>

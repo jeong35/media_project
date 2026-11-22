@@ -62,6 +62,10 @@ results.Add(await RunMockCareerCandidateSelectionAsync());
 results.Add(await RunOpenAiCareerEndingHttpContractAsync(content));
 results.Add(await RunFarmingProgressRecoveryAsync(content));
 results.Add(await RunFinalTimerRecoveryAsync(content));
+results.Add(await RunDialogueHistoryContractAsync(content));
+results.Add(await RunDialogueHistoryActIsolationAsync(content));
+results.Add(await RunDialogueDiagnosticsContractAsync(content));
+results.Add(await RunDialogueHistoryErrorsAsync(content));
 
 Console.WriteLine("| 테스트 | 기대 결과 | 실제 결과 | 최종 상태 | 판정 |");
 Console.WriteLine("| --- | --- | --- | --- | --- |");
@@ -675,6 +679,144 @@ static async Task<TestResult> RunFinalTimerRecoveryAsync(MockGameContent content
     catch (Exception error)
     {
         return new TestResult("Act 4 타이머 복구", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunDialogueHistoryContractAsync(MockGameContent content)
+{
+    const string expected = "opening + 2턴/sequence 정렬/공개 필드만";
+    try
+    {
+        await using var fixture = await GameFixture.CreateAsync(content);
+        var start = await fixture.Service.StartSessionAsync("mock");
+        var openingOnly = await fixture.Service.GetDialogueHistoryAsync(start.SessionId);
+        await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, "첫 번째 질문", NewKey()));
+        await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, "두 번째 질문", NewKey()));
+        var history = await fixture.Service.GetDialogueHistoryAsync(start.SessionId);
+        var serialized = JsonSerializer.Serialize(history, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var sequences = history.Records.Select(record => record.Sequence).ToArray();
+        var passed = openingOnly.Records.Count == 1 && openingOnly.Records[0].IsOpening
+            && string.IsNullOrEmpty(openingOnly.Records[0].PlayerText)
+            && history.Act == 1 && history.Records.Count == 3
+            && history.Records[0].IsOpening && history.Records[0].NpcDialogue == start.OpeningDialogue
+            && history.Records[1].PlayerText == "첫 번째 질문"
+            && history.Records[2].PlayerText == "두 번째 질문"
+            && sequences.SequenceEqual(sequences.Order())
+            && !serialized.Contains("feedback", StringComparison.OrdinalIgnoreCase)
+            && !serialized.Contains("careerFeedback", StringComparison.OrdinalIgnoreCase)
+            && !serialized.Contains("acceptedTags", StringComparison.OrdinalIgnoreCase)
+            && !serialized.Contains("conversationSummary", StringComparison.OrdinalIgnoreCase);
+        return new TestResult("현재 ACT 대화 기록 공개 계약", expected,
+            $"기록 {history.Records.Count}개/sequence {string.Join(',', sequences)}", $"ACT {history.Act}", passed,
+            passed ? null : "opening 또는 완료 턴 정렬, 공개 필드 경계가 올바르지 않습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("현재 ACT 대화 기록 공개 계약", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunDialogueHistoryActIsolationAsync(MockGameContent content)
+{
+    const string expected = "Act 2 opening만 반환/Act 1 제외";
+    try
+    {
+        await using var fixture = await GameFixture.CreateAsync(content);
+        var start = await fixture.Service.StartSessionAsync("mock");
+        await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, "Act 1 첫 대화", NewKey()));
+        await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, "Act 1 두 번째 대화", NewKey()));
+        await fixture.Service.SubmitDecisionBridgeAsync(start.SessionId, new DecisionBridgeRequest(NewKey()));
+        var result = await fixture.Service.SubmitChoiceAsync(start.SessionId,
+            new ChoiceRequest("prepare_evacuation", NewKey()));
+        var history = await fixture.Service.GetDialogueHistoryAsync(start.SessionId);
+        var passed = result.NextAct?.Act == 2 && history.Act == 2 && history.Records.Count == 1
+            && history.Records[0].IsOpening && history.Records[0].Act == 2
+            && history.Records.All(record => !record.PlayerText.Contains("Act 1"));
+        return new TestResult("ACT 변경 후 기록 격리", expected,
+            $"ACT {history.Act}/기록 {history.Records.Count}개", result.NextAct?.Scene.NpcName ?? "-", passed,
+            passed ? null : "이전 ACT의 대화가 플레이어용 기록에 섞였습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("ACT 변경 후 기록 격리", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunDialogueDiagnosticsContractAsync(MockGameContent content)
+{
+    const string expected = "GameEvent 내부 판정 보존/diagnostics 조회";
+    try
+    {
+        await using var fixture = await GameFixture.CreateAsync(content);
+        var start = await fixture.Service.StartSessionAsync("mock");
+        var response = await fixture.Service.SubmitDialogueAsync(start.SessionId,
+            new DialogueRequest(start.Scene.NpcId, "주민을 먼저 지키자", NewKey()));
+        var storedEvent = await fixture.Database.GameEvents.SingleAsync(gameEvent =>
+            gameEvent.SessionId == start.SessionId && gameEvent.EventType == "DialogueGenerated");
+        using var payload = JsonDocument.Parse(storedEvent.PayloadJson);
+        var root = payload.RootElement;
+        var diagnostics = await fixture.Service.GetDialogueDiagnosticsAsync(start.SessionId, 1);
+        var item = diagnostics.Events.Single();
+        var stored = root.GetProperty("feedback").GetString() == response.Feedback
+            && root.GetProperty("careerFeedback").GetString() == response.CareerFeedback
+            && root.TryGetProperty("conversationSummary", out _);
+        var passed = stored && item.Feedback == response.Feedback
+            && item.CareerFeedback == response.CareerFeedback
+            && item.AcceptedTags.SequenceEqual(response.AcceptedTags)
+            && item.PlayerText == "주민을 먼저 지키자"
+            && item.NpcDialogue == response.Dialogue && item.AttemptCount == response.AttemptCount;
+        return new TestResult("Development 대화 진단 계약", expected,
+            $"이벤트 {diagnostics.Events.Count}개/태그 {item.AcceptedTags.Count}개", item.ResponseSource, passed,
+            passed ? null : "저장 이벤트 또는 진단 응답에서 내부 판정 필드가 누락됐습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("Development 대화 진단 계약", expected, error.GetType().Name, "-", false, error.Message);
+    }
+}
+
+static async Task<TestResult> RunDialogueHistoryErrorsAsync(MockGameContent content)
+{
+    const string expected = "SESSION_NOT_FOUND/DIALOGUE_HISTORY_UNAVAILABLE";
+    try
+    {
+        await using var fixture = await GameFixture.CreateAsync(content);
+        var missingBlocked = false;
+        try
+        {
+            await fixture.Service.GetDialogueHistoryAsync(Guid.NewGuid());
+        }
+        catch (SessionNotFoundException)
+        {
+            missingBlocked = true;
+        }
+
+        var start = await fixture.Service.StartSessionAsync("mock");
+        var session = await fixture.Database.Sessions.SingleAsync(candidate => candidate.Id == start.SessionId);
+        session.Phase = "InvalidPhase";
+        await fixture.Database.SaveChangesAsync();
+        var invalidBlocked = false;
+        try
+        {
+            await fixture.Service.GetDialogueHistoryAsync(start.SessionId);
+        }
+        catch (GameRuleException error)
+        {
+            invalidBlocked = error.Code == "DIALOGUE_HISTORY_UNAVAILABLE";
+        }
+
+        var passed = missingBlocked && invalidBlocked;
+        return new TestResult("대화 기록 오류 처리", expected,
+            $"missing={missingBlocked}/invalid={invalidBlocked}", "차단", passed,
+            passed ? null : "존재하지 않는 세션 또는 잘못된 상태가 차단되지 않았습니다.");
+    }
+    catch (Exception error)
+    {
+        return new TestResult("대화 기록 오류 처리", expected, error.GetType().Name, "-", false, error.Message);
     }
 }
 

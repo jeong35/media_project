@@ -1,5 +1,10 @@
 ; Engine configuration file.
-; Edit through the Godot editor when possible.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
 
@@ -7,6 +12,7 @@ config_version=5
 
 config/name="빙의했더니 영지 멸망 3년 전"
 run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.5")
 
 [display]
 
@@ -21,4 +27,3 @@ window/stretch/mode="canvas_items"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.055, 0.067, 0.09, 1)
-
