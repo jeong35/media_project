@@ -10,6 +10,21 @@ const STORY_PAGE_CHARACTER_LIMIT := 240
 const TYPEWRITER_CHARACTERS_PER_SECOND := 36.0
 const LOADING_CUE_DELAY_SECONDS := 0.65
 const LOADING_FOLLOWUP_DELAY_SECONDS := 5.0
+const FARMING_ICON_IDLE := "idle"
+const FARMING_ICON_HOVER := "hover"
+const FARMING_ICON_PRESSED := "pressed"
+const FARMING_ICON_COMPLETED := "completed"
+const ROCK_HOVER_ICON := preload("res://assets/ui/farming_minigame_rock_hover.tres")
+const ROCK_PRESSED_ICON := preload("res://assets/ui/farming_minigame_rock_pressed.tres")
+const WEED_HOVER_ICON := preload("res://assets/ui/farming_minigame_weed_hover.tres")
+const WEED_PRESSED_ICON := preload("res://assets/ui/farming_minigame_weed_pressed.tres")
+const SEED_HOVER_ICON := preload("res://assets/ui/farming_minigame_seed_hover.tres")
+const SEED_COMPLETED_ICONS := [
+	preload("res://assets/ui/farming_minigame_seed_a_completed.tres"),
+	preload("res://assets/ui/farming_minigame_seed_b_completed.tres"),
+	preload("res://assets/ui/farming_minigame_seed_c_completed.tres"),
+	preload("res://assets/ui/farming_minigame_seed_dry_completed.tres")
+]
 @onready var title_screen: VBoxContainer = $Page/TitleScreen
 @onready var background_music: AudioStreamPlayer = $BackgroundMusic
 @onready var page_background_image: TextureRect = $PageBackgroundImage
@@ -142,6 +157,8 @@ var removed_obstacles := 0
 var correct_seeds := 0
 var removed_obstacle_indexes: Array[int] = []
 var planted_seed_indexes: Array[int] = []
+var obstacle_button_icons: Array[Dictionary] = []
+var seed_button_icons: Array[Dictionary] = []
 var water_target := "community"
 var farming_method := "manual"
 var water_choice_confirmed := false
@@ -164,6 +181,7 @@ var smoke_farming_layout_test := false
 var smoke_presentation_shell_test := false
 var smoke_loading_timing_test := false
 var smoke_button_assets_test := false
+var smoke_farming_button_states_test := false
 var smoke_act1_opening_test := false
 var smoke_runs := 0
 var final_time_limit := 0.0
@@ -224,9 +242,18 @@ func _ready() -> void:
 		choice_buttons[index].pressed.connect(_submit_choice.bind(index))
 	for index in final_choice_buttons.size():
 		final_choice_buttons[index].pressed.connect(_submit_final_choice.bind(index))
+	_initialize_farming_button_icons()
 	for index in obstacle_buttons.size():
+		obstacle_buttons[index].mouse_entered.connect(_on_farming_button_mouse_entered.bind(false, index))
+		obstacle_buttons[index].mouse_exited.connect(_on_farming_button_mouse_exited.bind(false, index))
+		obstacle_buttons[index].button_down.connect(_on_farming_button_down.bind(false, index))
+		obstacle_buttons[index].button_up.connect(_on_farming_button_up.bind(false, index))
 		obstacle_buttons[index].pressed.connect(_remove_obstacle.bind(index))
 	for index in seed_buttons.size():
+		seed_buttons[index].mouse_entered.connect(_on_farming_button_mouse_entered.bind(true, index))
+		seed_buttons[index].mouse_exited.connect(_on_farming_button_mouse_exited.bind(true, index))
+		seed_buttons[index].button_down.connect(_on_farming_button_down.bind(true, index))
+		seed_buttons[index].button_up.connect(_on_farming_button_up.bind(true, index))
 		seed_buttons[index].pressed.connect(_plant_seed.bind(index))
 	for index in water_buttons.size():
 		water_buttons[index].pressed.connect(_select_water.bind(index))
@@ -260,6 +287,7 @@ func _ready() -> void:
 	smoke_presentation_shell_test = "--smoke-presentation-shell" in arguments
 	smoke_loading_timing_test = "--smoke-loading-timing" in arguments
 	smoke_button_assets_test = "--smoke-button-assets" in arguments
+	smoke_farming_button_states_test = "--smoke-farming-button-states" in arguments
 	smoke_act1_opening_test = "--smoke-act1-opening" in arguments
 	smoke_resume_test = "--smoke-resume" in arguments or smoke_resume_timer_test
 	if "--smoke-dialogue-transient" in arguments:
@@ -294,6 +322,9 @@ func _ready() -> void:
 		return
 	if smoke_button_assets_test:
 		call_deferred("_run_button_assets_smoke")
+		return
+	if smoke_farming_button_states_test:
+		call_deferred("_run_farming_button_states_smoke")
 		return
 	_load_saved_session_reference()
 	_show_page_background("community_barley_field")
@@ -1250,6 +1281,68 @@ func _show_choice_result(payload: Dictionary) -> void:
 	_show_ending(payload)
 
 
+func _initialize_farming_button_icons() -> void:
+	obstacle_button_icons.clear()
+	seed_button_icons.clear()
+	for index in obstacle_buttons.size():
+		var hover_source: Texture2D = WEED_HOVER_ICON if index == 1 else ROCK_HOVER_ICON
+		var pressed_source: Texture2D = WEED_PRESSED_ICON if index == 1 else ROCK_PRESSED_ICON
+		var icons := {
+			FARMING_ICON_IDLE: _duplicate_farming_icon(obstacle_buttons[index].icon),
+			FARMING_ICON_HOVER: _duplicate_farming_icon(hover_source),
+			FARMING_ICON_PRESSED: _duplicate_farming_icon(pressed_source),
+			FARMING_ICON_COMPLETED: _duplicate_farming_icon(pressed_source)
+		}
+		obstacle_button_icons.append(icons)
+		obstacle_buttons[index].icon = icons[FARMING_ICON_IDLE]
+	for index in seed_buttons.size():
+		var icons := {
+			FARMING_ICON_IDLE: _duplicate_farming_icon(seed_buttons[index].icon),
+			FARMING_ICON_HOVER: _duplicate_farming_icon(SEED_HOVER_ICON),
+			FARMING_ICON_PRESSED: _duplicate_farming_icon(SEED_HOVER_ICON),
+			FARMING_ICON_COMPLETED: _duplicate_farming_icon(SEED_COMPLETED_ICONS[index])
+		}
+		seed_button_icons.append(icons)
+		seed_buttons[index].icon = icons[FARMING_ICON_IDLE]
+
+
+func _duplicate_farming_icon(source: Texture2D) -> Texture2D:
+	return source.duplicate(true) as Texture2D
+
+
+func _on_farming_button_mouse_entered(is_seed: bool, index: int) -> void:
+	_set_farming_button_icon(is_seed, index, FARMING_ICON_HOVER)
+
+
+func _on_farming_button_mouse_exited(is_seed: bool, index: int) -> void:
+	_set_farming_button_icon(is_seed, index, FARMING_ICON_IDLE)
+
+
+func _on_farming_button_down(is_seed: bool, index: int) -> void:
+	_set_farming_button_icon(is_seed, index, FARMING_ICON_PRESSED)
+
+
+func _on_farming_button_up(is_seed: bool, index: int) -> void:
+	var button := seed_buttons[index] if is_seed else obstacle_buttons[index]
+	var mouse_over := button.get_global_rect().has_point(button.get_global_mouse_position())
+	_set_farming_button_icon(is_seed, index, FARMING_ICON_HOVER if mouse_over else FARMING_ICON_IDLE)
+
+
+func _set_farming_button_icon(is_seed: bool, index: int, requested_state: String) -> void:
+	var completed := planted_seed_indexes.has(index) if is_seed else removed_obstacle_indexes.has(index)
+	var state := FARMING_ICON_COMPLETED if completed else requested_state
+	var icons := seed_button_icons[index] if is_seed else obstacle_button_icons[index]
+	var button := seed_buttons[index] if is_seed else obstacle_buttons[index]
+	button.icon = icons[state]
+
+
+func _sync_farming_button_icons() -> void:
+	for index in obstacle_buttons.size():
+		_set_farming_button_icon(false, index, FARMING_ICON_IDLE)
+	for index in seed_buttons.size():
+		_set_farming_button_icon(true, index, FARMING_ICON_IDLE)
+
+
 func _show_farming(payload: Dictionary, transition_feedback: String, saved_progress: Dictionary = {}) -> void:
 	game_screen.hide()
 	ending_screen.hide()
@@ -1263,6 +1356,7 @@ func _show_farming(payload: Dictionary, transition_feedback: String, saved_progr
 	correct_seeds = 0
 	removed_obstacle_indexes.clear()
 	planted_seed_indexes.clear()
+	_sync_farming_button_icons()
 	water_target = "community"
 	farming_method = "manual"
 	water_choice_confirmed = bool(saved_progress.get("waterChoiceConfirmed", false))
@@ -1271,10 +1365,12 @@ func _show_farming(payload: Dictionary, transition_feedback: String, saved_progr
 	var seed_labels := ["비옥한 칸 A", "비옥한 칸 B", "비옥한 칸 C", "메마른 칸"]
 	for index in obstacle_buttons.size():
 		obstacle_buttons[index].disabled = false
-		obstacle_buttons[index].text = obstacle_labels[index]
+		obstacle_buttons[index].text = ""
+		obstacle_buttons[index].tooltip_text = obstacle_labels[index]
 	for index in seed_buttons.size():
 		seed_buttons[index].disabled = false
-		seed_buttons[index].text = seed_labels[index]
+		seed_buttons[index].text = ""
+		seed_buttons[index].tooltip_text = seed_labels[index]
 	for index in water_buttons.size():
 		water_buttons[index].button_pressed = false
 	for index in method_buttons.size():
@@ -1284,13 +1380,11 @@ func _show_farming(payload: Dictionary, transition_feedback: String, saved_progr
 		if index >= 0 and index < obstacle_buttons.size():
 			removed_obstacle_indexes.append(index)
 			obstacle_buttons[index].disabled = true
-			obstacle_buttons[index].text = "✓ 정리 완료"
 	for value in saved_progress.get("plantedSeedIndexes", []):
 		var index := int(value)
 		if index >= 0 and index < seed_buttons.size():
 			planted_seed_indexes.append(index)
 			seed_buttons[index].disabled = true
-			seed_buttons[index].text = "✓ 씨앗 배치" if index < 3 else "메마른 땅"
 	removed_obstacles = removed_obstacle_indexes.size()
 	correct_seeds = planted_seed_indexes.filter(func(index: int) -> bool: return index < 3).size()
 	var saved_water := str(saved_progress.get("waterTarget", "community"))
@@ -1322,28 +1416,27 @@ func _show_farming(payload: Dictionary, transition_feedback: String, saved_progr
 
 
 func _remove_obstacle(index: int) -> void:
-	if obstacle_buttons[index].disabled:
+	if removed_obstacle_indexes.has(index) or obstacle_buttons[index].disabled:
 		return
 	obstacle_buttons[index].disabled = true
-	obstacle_buttons[index].text = "✓ 정리 완료"
 	removed_obstacles += 1
 	removed_obstacle_indexes.append(index)
+	_set_farming_button_icon(false, index, FARMING_ICON_COMPLETED)
 	farming_feedback.text = "돌과 잡초를 걷어 내자 묻혀 있던 밭고랑이 모습을 드러냈다."
 	_update_farming_progress()
 	_queue_farming_checkpoint()
 
 
 func _plant_seed(index: int) -> void:
-	if seed_buttons[index].disabled:
+	if planted_seed_indexes.has(index) or seed_buttons[index].disabled:
 		return
 	seed_buttons[index].disabled = true
 	planted_seed_indexes.append(index)
+	_set_farming_button_icon(true, index, FARMING_ICON_COMPLETED)
 	if index < 3:
-		seed_buttons[index].text = "✓ 씨앗 배치"
 		correct_seeds += 1
 		farming_feedback.text = "비옥한 흙에 마력보리 씨앗을 심었다. 작은 빛이 흙 사이로 번졌다."
 	else:
-		seed_buttons[index].text = "메마른 땅"
 		farming_feedback.text = "흙이 너무 말라 있다. 이 밭고랑에서는 씨앗이 버티기 어렵겠다."
 	_update_farming_progress()
 	_queue_farming_checkpoint()
@@ -1395,16 +1488,18 @@ func _update_farming_progress() -> void:
 	for index in farming_stage_panels.size():
 		var completed := index < active_stage or active_stage == 4
 		var current := index == active_stage
-		var label := farming_stage_panels[index].get_node("Label") as Label
-		label.text = "%s  %s" % ["✓" if completed else "▶" if current else str(index + 1), stage_names[index]]
-		label.add_theme_color_override("font_color", Color("d9f0c0") if completed \
-			else Color("ffe29a") if current else Color("d8c8ad"))
+		var stage_label := farming_stage_panels[index].get_node("Label")
+		if stage_label is Label:
+			stage_label.text = "%s  %s" % ["✓" if completed else "▶" if current else str(index + 1), stage_names[index]]
+			stage_label.add_theme_color_override("font_color", Color("d9f0c0") if completed \
+				else Color("ffe29a") if current else Color("d8c8ad"))
 		farming_stage_panels[index].add_theme_stylebox_override("panel",
 			_farming_stage_style(completed, current))
 	for index in obstacle_buttons.size():
 		obstacle_buttons[index].disabled = removed_obstacle_indexes.has(index)
 	for index in seed_buttons.size():
 		seed_buttons[index].disabled = planted_seed_indexes.has(index) or active_stage < 1
+	_sync_farming_button_icons()
 	for button in water_buttons:
 		button.disabled = active_stage < 2
 	for button in method_buttons:
@@ -1510,7 +1605,7 @@ func _show_ending(payload: Dictionary) -> void:
 	final_choice_screen.hide()
 	final_choice_timer.stop()
 	ending_screen.show()
-	ending_screen.scroll_vertical = 0
+	call_deferred("_reset_ending_scroll")
 	if smoke_test:
 		if smoke_resume_test:
 			print("MOCK_SESSION_RESUME_OK: %s" % JSON.stringify(payload))
@@ -1522,6 +1617,10 @@ func _show_ending(payload: Dictionary) -> void:
 		else:
 			print("MOCK_SLICE_RESTART_OK: %s" % JSON.stringify(payload))
 			get_tree().quit()
+
+
+func _reset_ending_scroll() -> void:
+	ending_screen.scroll_vertical = 0
 
 
 func _translate_career_rank(rank_id: String) -> String:
@@ -1968,9 +2067,16 @@ func _run_farming_layout_smoke() -> void:
 	await get_tree().process_frame
 
 	var root_rect := farming_screen.get_global_rect()
-	var initial_valid := root_rect.size == Vector2(960.0, 540.0) \
+	var farming_layout_rect := ($FarmingScreen/Margin/Layout as Control).get_global_rect()
+	var farming_layout_fits := root_rect.encloses(farming_layout_rect) \
+		and farming_layout_rect.position == Vector2(14.0, 8.0) \
+		and farming_layout_rect.end == Vector2(946.0, 532.0)
+	var first_stage_label := farming_stage_panels[0].get_node("Label")
+	var first_stage_valid: bool = first_stage_label is TextureRect \
+		or first_stage_label is Label and first_stage_label.text.begins_with("▶")
+	var initial_valid: bool = root_rect.size == Vector2(960.0, 540.0) \
 		and farming_finish_button.disabled \
-		and (farming_stage_panels[0].get_node("Label") as Label).text.begins_with("▶")
+		and first_stage_valid and farming_layout_fits
 	var targets_valid := true
 	for button in obstacle_buttons + seed_buttons + water_buttons + method_buttons:
 		targets_valid = targets_valid and button.size.x >= 120.0 and button.size.y >= 60.0 \
@@ -1993,7 +2099,11 @@ func _run_farming_layout_smoke() -> void:
 
 	var stages_complete := true
 	for panel in farming_stage_panels:
-		stages_complete = stages_complete and (panel.get_node("Label") as Label).text.begins_with("✓")
+		var stage_label := panel.get_node("Label")
+		if stage_label is Label:
+			stages_complete = stages_complete and stage_label.text.begins_with("✓")
+		else:
+			stages_complete = stages_complete and stage_label is TextureRect
 	var completed_valid := not farming_finish_button.disabled \
 		and farming_progress.text == "장애물 3/3 · 올바른 씨앗 3/3" \
 		and water_buttons[1].button_pressed and method_buttons[2].button_pressed \
@@ -2006,13 +2116,98 @@ func _run_farming_layout_smoke() -> void:
 		completed_error = _save_viewport_png(completed_screenshot)
 	if initial_valid and targets_valid and completed_valid \
 		and initial_error == OK and completed_error == OK:
-		print("MOCK_FARMING_LAYOUT_OK: root=%s initial=%s completed=%s" % [
-			root_rect, initial_screenshot, completed_screenshot
+		print("MOCK_FARMING_LAYOUT_OK: root=%s layout=%s initial=%s completed=%s" % [
+			root_rect, farming_layout_rect, initial_screenshot, completed_screenshot
 		])
 		get_tree().quit()
 		return
-	push_error("농사 미니게임 레이아웃 검증에 실패했습니다: initial=%s targets=%s completed=%s" % [
-		initial_valid, targets_valid, completed_valid
+	push_error("농사 미니게임 레이아웃 검증에 실패했습니다: initial=%s fits=%s targets=%s completed=%s layout=%s" % [
+		initial_valid, farming_layout_fits, targets_valid, completed_valid, farming_layout_rect
+	])
+	get_tree().quit(1)
+
+
+func _run_farming_button_states_smoke() -> void:
+	title_screen.hide()
+	game_screen.hide()
+	ending_screen.hide()
+	_show_farming({
+		"title": "마력보리 공동밭",
+		"instructions": "상태별 버튼 이미지 테스트"
+	}, "")
+	await get_tree().process_frame
+
+	var obstacle_idle := obstacle_button_icons[0][FARMING_ICON_IDLE] as AtlasTexture
+	var obstacle_hover := obstacle_button_icons[0][FARMING_ICON_HOVER] as AtlasTexture
+	var obstacle_pressed := obstacle_button_icons[0][FARMING_ICON_PRESSED] as AtlasTexture
+	var obstacle_completed := obstacle_button_icons[0][FARMING_ICON_COMPLETED] as AtlasTexture
+	var seed_hover := seed_button_icons[0][FARMING_ICON_HOVER] as AtlasTexture
+	var seed_pressed := seed_button_icons[0][FARMING_ICON_PRESSED] as AtlasTexture
+	var independent_resources: bool = obstacle_button_icons[0][FARMING_ICON_IDLE] != obstacle_button_icons[2][FARMING_ICON_IDLE] \
+		and obstacle_pressed != obstacle_completed and obstacle_pressed.region == obstacle_completed.region \
+		and seed_hover != seed_pressed and seed_hover.region == seed_pressed.region
+
+	var obstacle_rect_before := obstacle_buttons[0].get_global_rect()
+	_on_farming_button_mouse_entered(false, 0)
+	await get_tree().process_frame
+	var hover_valid := obstacle_buttons[0].icon == obstacle_hover
+	var obstacle_layout_valid := obstacle_buttons[0].get_global_rect() == obstacle_rect_before
+	_on_farming_button_down(false, 0)
+	var pressed_valid := obstacle_buttons[0].icon == obstacle_pressed
+	_on_farming_button_mouse_exited(false, 0)
+	var idle_valid := obstacle_buttons[0].icon == obstacle_idle
+	_remove_obstacle(0)
+	var obstacle_count := removed_obstacles
+	_on_farming_button_mouse_entered(false, 0)
+	_on_farming_button_mouse_exited(false, 0)
+	_remove_obstacle(0)
+	var obstacle_completed_valid := obstacle_buttons[0].icon == obstacle_completed \
+		and removed_obstacles == obstacle_count and removed_obstacle_indexes.size() == 1
+
+	_remove_obstacle(1)
+	_remove_obstacle(2)
+	await get_tree().process_frame
+	var seed_rect_before := seed_buttons[0].get_global_rect()
+	_on_farming_button_mouse_entered(true, 0)
+	await get_tree().process_frame
+	var seed_hover_valid := seed_buttons[0].icon == seed_hover
+	var seed_layout_valid := seed_buttons[0].get_global_rect() == seed_rect_before
+	_on_farming_button_down(true, 0)
+	var seed_pressed_valid := seed_buttons[0].icon == seed_pressed
+	_plant_seed(0)
+	_plant_seed(3)
+	var correct_seed_count := correct_seeds
+	var fertile_completed := seed_button_icons[0][FARMING_ICON_COMPLETED] as AtlasTexture
+	var dry_completed := seed_button_icons[3][FARMING_ICON_COMPLETED] as AtlasTexture
+	_on_farming_button_mouse_entered(true, 0)
+	_on_farming_button_mouse_exited(true, 0)
+	_plant_seed(0)
+	var seed_completed_valid := seed_buttons[0].icon == fertile_completed \
+		and seed_buttons[3].icon == dry_completed and fertile_completed.region != dry_completed.region \
+		and correct_seeds == correct_seed_count and planted_seed_indexes.size() == 2
+
+	_show_farming({"title": "복원 테스트", "instructions": ""}, "", {
+		"removedObstacleIndexes": [0, 2],
+		"plantedSeedIndexes": [1, 3]
+	})
+	var restore_valid: bool = removed_obstacles == 2 and correct_seeds == 1 \
+		and obstacle_buttons[0].icon == obstacle_button_icons[0][FARMING_ICON_COMPLETED] \
+		and obstacle_buttons[1].icon == obstacle_button_icons[1][FARMING_ICON_IDLE] \
+		and obstacle_buttons[2].icon == obstacle_button_icons[2][FARMING_ICON_COMPLETED] \
+		and seed_buttons[1].icon == seed_button_icons[1][FARMING_ICON_COMPLETED] \
+		and seed_buttons[3].icon == seed_button_icons[3][FARMING_ICON_COMPLETED]
+
+	if independent_resources and hover_valid and pressed_valid and idle_valid \
+		and obstacle_layout_valid and seed_layout_valid \
+		and obstacle_completed_valid and seed_hover_valid and seed_pressed_valid \
+		and seed_completed_valid and restore_valid:
+		print("MOCK_FARMING_BUTTON_STATES_OK: hover, pressed, completed, dry, duplicate, restore")
+		get_tree().quit()
+		return
+	push_error("농사 버튼 상태 검증 실패: resources=%s hover=%s pressed=%s idle=%s layout=%s/%s seed_rect=%s/%s obstacle=%s seed_hover=%s seed_pressed=%s seed_completed=%s restore=%s" % [
+		independent_resources, hover_valid, pressed_valid, idle_valid, obstacle_layout_valid,
+		seed_layout_valid, seed_rect_before, seed_buttons[0].get_global_rect(), obstacle_completed_valid,
+		seed_hover_valid, seed_pressed_valid, seed_completed_valid, restore_valid
 	])
 	get_tree().quit(1)
 
@@ -2043,7 +2238,7 @@ func _run_presentation_shell_smoke() -> void:
 			"careerRank": "accomplished",
 			"endingTone": "orthodox",
 			"territoryOutcome": "영지는 살아남았다.",
-			"epilogue": "공동밭에는 다시 마력보리가 자랐다.",
+			"epilogue": "공동밭에는 다시 마력보리가 자랐다. ".repeat(30),
 			"records": ["마력보리 공동밭을 지켰다."],
 			"shareLine": "북부의 저녁은 오래도록 평온했다."
 		}
@@ -2051,17 +2246,24 @@ func _run_presentation_shell_smoke() -> void:
 	await get_tree().process_frame
 	var ending_header_hidden := not ($Page/EndingScreen/Content/Header as Label).visible
 	var career_summary_hidden := not career_summary.visible
+	var ending_content := $Page/EndingScreen/Content as Control
+	var ending_top_padding := $Page/EndingScreen/Content/TopPadding as Control
+	var ending_bottom_padding := $Page/EndingScreen/Content/BottomPadding as Control
+	var ending_padding_valid := ending_top_padding.size.y == 8.0 and ending_bottom_padding.size.y == 8.0 \
+		and occupation.get_global_rect().position.y > ending_screen.get_global_rect().position.y \
+		and restart_button.get_global_rect().end.y < ending_content.get_global_rect().end.y \
+		and ending_content.size.y > ending_screen.size.y and ending_screen.scroll_vertical == 0
 	var ending_valid := ending_screen.visible and page_background_image.visible \
 		and page_background_image.texture == expected_background \
-		and ending_header_hidden and career_summary_hidden \
+		and ending_header_hidden and career_summary_hidden and ending_padding_valid \
 		and (DisplayServer.get_name() == "headless" or background_music.playing)
 	if title_valid and ending_valid and name_font_valid and music_valid:
 		print("MOCK_PRESENTATION_SHELL_OK: title_background=field ending_background=field ending_auxiliary_labels=hidden name_font=16 music_loop=true")
 		background_music.stop()
 		get_tree().quit()
 		return
-	push_error("타이틀·엔딩 배경 및 음악 검증 실패: title=%s ending=%s font=%s music=%s" % [
-		title_valid, ending_valid, name_font_valid, music_valid
+	push_error("타이틀·엔딩 배경 및 음악 검증 실패: title=%s ending=%s padding=%s font=%s music=%s" % [
+		title_valid, ending_valid, ending_padding_valid, name_font_valid, music_valid
 	])
 	background_music.stop()
 	get_tree().quit(1)

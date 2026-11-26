@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dxufccoea1u55" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Theme" uid="uid://dglkndn283fab" path="res://themes/game_theme.tres" id="2_theme"]
-[ext_resource type="PackedScene" path="res://scenes/farming_minigame.tscn" id="3_farming"]
+[ext_resource type="PackedScene" uid="uid://dae11yfr6mmhq" path="res://scenes/farming_minigame.tscn" id="3_farming"]
 [ext_resource type="AudioStream" uid="uid://cgtmgirfpcxim" path="res://assets/audio/village_twilight.mp3" id="4_music"]
 
 [node name="Main" type="Control"]
@@ -201,6 +201,10 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 18
 
+[node name="TopPadding" type="Control" parent="Page/EndingScreen/Content"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+
 [node name="Header" type="Label" parent="Page/EndingScreen/Content"]
 visible = false
 layout_mode = 2
@@ -259,6 +263,10 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_type_variation = &"OrnatePrimaryButton"
 text = "다시 시작"
+
+[node name="BottomPadding" type="Control" parent="Page/EndingScreen/Content"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
 
 [node name="FarmingScreen" parent="." instance=ExtResource("3_farming")]
 layout_mode = 1

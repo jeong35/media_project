@@ -1,43 +1,12 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=22 format=3 uid="uid://dae11yfr6mmhq"]
 
-[ext_resource type="Texture2D" path="res://assets/ui/farming_ui_sheet.png" id="1_sheet"]
-
-[sub_resource type="AtlasTexture" id="AtlasRock"]
-atlas = ExtResource("1_sheet")
-region = Rect2(72, 960, 180, 126)
-filter_clip = true
-
-[sub_resource type="AtlasTexture" id="AtlasWeed"]
-atlas = ExtResource("1_sheet")
-region = Rect2(245, 955, 155, 131)
-filter_clip = true
-
-[sub_resource type="AtlasTexture" id="AtlasSeed"]
-atlas = ExtResource("1_sheet")
-region = Rect2(450, 955, 140, 126)
-filter_clip = true
-
-[sub_resource type="AtlasTexture" id="AtlasWater"]
-atlas = ExtResource("1_sheet")
-region = Rect2(615, 945, 95, 140)
-filter_clip = true
-
-[sub_resource type="AtlasTexture" id="AtlasGloves"]
-atlas = ExtResource("1_sheet")
-region = Rect2(720, 950, 160, 135)
-filter_clip = true
-
-[sub_resource type="AtlasTexture" id="AtlasCrystal"]
-atlas = ExtResource("1_sheet")
-region = Rect2(895, 930, 135, 155)
-filter_clip = true
-
-[sub_resource type="AtlasTexture" id="AtlasShovel"]
-atlas = ExtResource("1_sheet")
-region = Rect2(1040, 950, 160, 136)
-filter_clip = true
+[ext_resource type="Texture2D" uid="uid://dv33nken7v5t5" path="res://assets/ui/farming_ui_sheet.png" id="1_sheet"]
 
 [sub_resource type="StyleBoxFlat" id="StyleHeader"]
+content_margin_left = 20.0
+content_margin_top = 5.0
+content_margin_right = 20.0
+content_margin_bottom = 5.0
 bg_color = Color(0.18, 0.075, 0.035, 0.9)
 border_width_left = 2
 border_width_top = 2
@@ -48,12 +17,12 @@ corner_radius_top_left = 16
 corner_radius_top_right = 16
 corner_radius_bottom_right = 16
 corner_radius_bottom_left = 16
-content_margin_left = 20.0
-content_margin_top = 5.0
-content_margin_right = 20.0
-content_margin_bottom = 5.0
 
 [sub_resource type="StyleBoxFlat" id="StyleWoodPanel"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
 bg_color = Color(0.14, 0.07, 0.035, 0.84)
 border_width_left = 2
 border_width_top = 2
@@ -64,12 +33,52 @@ corner_radius_top_left = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
-content_margin_left = 10.0
-content_margin_top = 8.0
-content_margin_right = 10.0
-content_margin_bottom = 8.0
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_csfnw"]
+atlas = ExtResource("1_sheet")
+region = Rect2(57.382904, 26.483047, 319.90585, 62.956306)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_oinn0"]
+atlas = ExtResource("1_sheet")
+region = Rect2(398.30133, 26.376709, 316.24567, 62.224274)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_7p65d"]
+atlas = ExtResource("1_sheet")
+region = Rect2(736.88464, 26.814056, 316.24573, 61.492218)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6itsr"]
+atlas = ExtResource("1_sheet")
+region = Rect2(1076.8922, 26.17778, 316.24573, 62.224243)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_wff2g"]
+atlas = ExtResource("1_sheet")
+region = Rect2(32.194626, 122.70204, 213.7586, 163.9792)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_mgnes"]
+atlas = ExtResource("1_sheet")
+region = Rect2(768.04236, 127.55942, 174.2279, 164.71127)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8l8ru"]
+atlas = ExtResource("1_sheet")
+region = Rect2(19.95871, 304.781, 170.56767, 166.65497)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2m4u0"]
+atlas = ExtResource("1_sheet")
+region = Rect2(381.4007, 318.6265, 170.56769, 140.55362)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ihkgc"]
+atlas = ExtResource("1_sheet")
+region = Rect2(737.177, 320.0906, 163.2472, 136.16129)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_e5fph"]
+atlas = ExtResource("1_sheet")
+region = Rect2(1090.0251, 320.0906, 160.31897, 131.03696)
 
 [sub_resource type="StyleBoxFlat" id="StyleWorkbench"]
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
 bg_color = Color(0.19, 0.095, 0.04, 0.9)
 border_width_left = 3
 border_width_top = 3
@@ -80,23 +89,42 @@ corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
-content_margin_left = 10.0
-content_margin_top = 6.0
-content_margin_right = 10.0
-content_margin_bottom = 6.0
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jxqmh"]
+atlas = ExtResource("1_sheet")
+region = Rect2(65.15073, 470.62335, 181.54843, 134.6972)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ywooi"]
+atlas = ExtResource("1_sheet")
+region = Rect2(513.90173, 469.4288, 191.06506, 134.69717)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ci81v"]
+atlas = ExtResource("1_sheet")
+region = Rect2(995.5907, 476.01727, 182.2804, 128.84076)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_qar50"]
+atlas = ExtResource("1_sheet")
+region = Rect2(54.89415, 612.2446, 193.99326, 125.9126)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hgpkv"]
+atlas = ExtResource("1_sheet")
+region = Rect2(512.4376, 610.7145, 188.13684, 126.64465)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3bkq3"]
+atlas = ExtResource("1_sheet")
+region = Rect2(974.3612, 614.37476, 192.52917, 125.18054)
 
 [sub_resource type="StyleBoxFlat" id="StyleCaption"]
-bg_color = Color(0.075, 0.055, 0.045, 0.78)
-border_width_top = 1
-border_width_bottom = 1
-border_color = Color(0.73, 0.52, 0.24, 0.82)
 content_margin_left = 16.0
 content_margin_top = 5.0
 content_margin_right = 16.0
 content_margin_bottom = 5.0
+bg_color = Color(0.075, 0.055, 0.045, 0.78)
+border_width_top = 1
+border_width_bottom = 1
+border_color = Color(0.73, 0.52, 0.24, 0.82)
 
 [node name="FarmingScreen" type="Control"]
-visible = false
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -105,13 +133,13 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Shade" type="ColorRect" parent="."]
-mouse_filter = 2
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 color = Color(0.08, 0.045, 0.02, 0.18)
 
 [node name="Margin" type="MarginContainer" parent="."]
@@ -200,37 +228,37 @@ horizontal_alignment = 1
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 
-[node name="Label" type="Label" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage0"]
+[node name="Label" type="TextureRect" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage0"]
 layout_mode = 2
-text = "1  밭 정리"
-vertical_alignment = 1
+texture = SubResource("AtlasTexture_csfnw")
+expand_mode = 5
 
 [node name="Stage1" type="PanelContainer" parent="Margin/Layout/MainArea/StagePanel/Steps"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 
-[node name="Label" type="Label" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage1"]
+[node name="Label" type="TextureRect" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage1"]
 layout_mode = 2
-text = "2  씨앗 배치"
-vertical_alignment = 1
+texture = SubResource("AtlasTexture_oinn0")
+expand_mode = 5
 
 [node name="Stage2" type="PanelContainer" parent="Margin/Layout/MainArea/StagePanel/Steps"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 
-[node name="Label" type="Label" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage2"]
+[node name="Label" type="TextureRect" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage2"]
 layout_mode = 2
-text = "3  남은 물 배분"
-vertical_alignment = 1
+texture = SubResource("AtlasTexture_7p65d")
+expand_mode = 5
 
 [node name="Stage3" type="PanelContainer" parent="Margin/Layout/MainArea/StagePanel/Steps"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 
-[node name="Label" type="Label" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage3"]
+[node name="Label" type="TextureRect" parent="Margin/Layout/MainArea/StagePanel/Steps/Stage3"]
 layout_mode = 2
-text = "4  작업 방식"
-vertical_alignment = 1
+texture = SubResource("AtlasTexture_6itsr")
+expand_mode = 5
 
 [node name="FieldArea" type="VBoxContainer" parent="Margin/Layout/MainArea"]
 layout_mode = 2
@@ -257,28 +285,25 @@ alignment = 1
 custom_minimum_size = Vector2(172, 76)
 layout_mode = 2
 theme_type_variation = &"FarmingObjectButton"
-icon = SubResource("AtlasRock")
+icon = SubResource("AtlasTexture_wff2g")
+icon_alignment = 1
 expand_icon = true
-icon_max_width = 78
-text = "돌 치우기"
 
 [node name="Weed1" type="Button" parent="Margin/Layout/MainArea/FieldArea/Obstacles"]
 custom_minimum_size = Vector2(172, 76)
 layout_mode = 2
 theme_type_variation = &"FarmingObjectButton"
-icon = SubResource("AtlasWeed")
+icon = SubResource("AtlasTexture_mgnes")
+icon_alignment = 1
 expand_icon = true
-icon_max_width = 72
-text = "잡초 뽑기"
 
 [node name="Rock2" type="Button" parent="Margin/Layout/MainArea/FieldArea/Obstacles"]
 custom_minimum_size = Vector2(172, 76)
 layout_mode = 2
 theme_type_variation = &"FarmingObjectButton"
-icon = SubResource("AtlasRock")
+icon = SubResource("AtlasTexture_wff2g")
+icon_alignment = 1
 expand_icon = true
-icon_max_width = 78
-text = "돌 치우기"
 
 [node name="SeedHeading" type="Label" parent="Margin/Layout/MainArea/FieldArea"]
 layout_mode = 2
@@ -300,37 +325,29 @@ alignment = 1
 custom_minimum_size = Vector2(132, 68)
 layout_mode = 2
 theme_type_variation = &"FarmingPlotButton"
-icon = SubResource("AtlasSeed")
+icon = SubResource("AtlasTexture_8l8ru")
 expand_icon = true
-icon_max_width = 50
-text = "비옥한 칸 A"
 
 [node name="Seed1" type="Button" parent="Margin/Layout/MainArea/FieldArea/SeedCells"]
 custom_minimum_size = Vector2(132, 68)
 layout_mode = 2
 theme_type_variation = &"FarmingPlotButton"
-icon = SubResource("AtlasSeed")
+icon = SubResource("AtlasTexture_2m4u0")
 expand_icon = true
-icon_max_width = 50
-text = "비옥한 칸 B"
 
 [node name="Seed2" type="Button" parent="Margin/Layout/MainArea/FieldArea/SeedCells"]
 custom_minimum_size = Vector2(132, 68)
 layout_mode = 2
 theme_type_variation = &"FarmingPlotButton"
-icon = SubResource("AtlasSeed")
+icon = SubResource("AtlasTexture_ihkgc")
 expand_icon = true
-icon_max_width = 50
-text = "비옥한 칸 C"
 
 [node name="Seed3" type="Button" parent="Margin/Layout/MainArea/FieldArea/SeedCells"]
 custom_minimum_size = Vector2(132, 68)
 layout_mode = 2
 theme_type_variation = &"FarmingPlotButton"
-icon = SubResource("AtlasSeed")
+icon = SubResource("AtlasTexture_e5fph")
 expand_icon = true
-icon_max_width = 50
-text = "메마른 칸"
 
 [node name="WorkbenchRow" type="HBoxContainer" parent="Margin/Layout"]
 custom_minimum_size = Vector2(0, 104)
@@ -363,30 +380,27 @@ custom_minimum_size = Vector2(130, 66)
 layout_mode = 2
 theme_type_variation = &"FarmingTokenButton"
 toggle_mode = true
-icon = SubResource("AtlasWater")
+icon = SubResource("AtlasTexture_jxqmh")
+icon_alignment = 1
 expand_icon = true
-icon_max_width = 42
-text = "주민 공동밭"
 
 [node name="Ward" type="Button" parent="Margin/Layout/WorkbenchRow/WaterBench/Content/WaterChoices"]
 custom_minimum_size = Vector2(130, 66)
 layout_mode = 2
 theme_type_variation = &"FarmingTokenButton"
 toggle_mode = true
-icon = SubResource("AtlasCrystal")
+icon = SubResource("AtlasTexture_ywooi")
+icon_alignment = 1
 expand_icon = true
-icon_max_width = 42
-text = "결계핵 동력밭"
 
 [node name="Market" type="Button" parent="Margin/Layout/WorkbenchRow/WaterBench/Content/WaterChoices"]
 custom_minimum_size = Vector2(130, 66)
 layout_mode = 2
 theme_type_variation = &"FarmingTokenButton"
 toggle_mode = true
-icon = SubResource("AtlasSeed")
+icon = SubResource("AtlasTexture_ci81v")
+icon_alignment = 1
 expand_icon = true
-icon_max_width = 42
-text = "판매용 밭"
 
 [node name="MethodBench" type="PanelContainer" parent="Margin/Layout/WorkbenchRow"]
 layout_mode = 2
@@ -414,30 +428,27 @@ custom_minimum_size = Vector2(130, 66)
 layout_mode = 2
 theme_type_variation = &"FarmingTokenButton"
 toggle_mode = true
-icon = SubResource("AtlasGloves")
+icon = SubResource("AtlasTexture_qar50")
+icon_alignment = 1
 expand_icon = true
-icon_max_width = 42
-text = "주민과 수작업"
 
 [node name="Magic" type="Button" parent="Margin/Layout/WorkbenchRow/MethodBench/Content/MethodChoices"]
 custom_minimum_size = Vector2(130, 66)
 layout_mode = 2
 theme_type_variation = &"FarmingTokenButton"
 toggle_mode = true
-icon = SubResource("AtlasCrystal")
+icon = SubResource("AtlasTexture_hgpkv")
+icon_alignment = 1
 expand_icon = true
-icon_max_width = 42
-text = "마력 사용"
 
 [node name="Tools" type="Button" parent="Margin/Layout/WorkbenchRow/MethodBench/Content/MethodChoices"]
 custom_minimum_size = Vector2(130, 66)
 layout_mode = 2
 theme_type_variation = &"FarmingTokenButton"
 toggle_mode = true
-icon = SubResource("AtlasShovel")
+icon = SubResource("AtlasTexture_3bkq3")
+icon_alignment = 1
 expand_icon = true
-icon_max_width = 42
-text = "개량 도구"
 
 [node name="CaptionPanel" type="PanelContainer" parent="Margin/Layout"]
 custom_minimum_size = Vector2(0, 34)
@@ -462,4 +473,4 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_type_variation = &"OrnatePrimaryButton"
 disabled = true
-text = "농사 결과 확인"
+text = "농사 완료"

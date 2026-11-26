@@ -773,3 +773,50 @@ dotnet run --project tests/Game.Rules.Tests/Game.Rules.Tests.csproj
 
 - 프레젠테이션 shell 스모크에 두 보조 Label의 비표시 상태 검증을 추가했다.
 - 실제 Live API 호출 0회, 성공률·지연 N/A, fallback 0회.
+
+---
+
+## 2026-11-26 — 농사 장애물·씨앗 버튼 상태 이미지 전환
+
+### 목표와 구현
+
+- 기존 `Button` 노드와 `_remove_obstacle(index)`, `_plant_seed(index)` 처리 흐름을 유지하면서 Idle, Hover, Pressed, Completed 아이콘 상태를 연결했다.
+- `mouse_entered`, `mouse_exited`, `button_down`, `button_up`, `pressed` 신호를 사용하며 `Toggle Mode`는 추가하지 않았다.
+- 씬에서 사용자가 지정한 Idle `AtlasTexture` Region과 기존 Hover/Pressed 리소스 Region은 변경하지 않았다. 런타임에는 모든 버튼·상태 리소스를 깊은 복제해 같은 Atlas PNG를 공유하더라도 `AtlasTexture` 인스턴스가 서로 독립적이다.
+- 씨앗 Hover와 Pressed에는 모두 `farming_minigame_seed_hover.tres`를 독립 복제해 사용했다. Completed는 에셋 시트의 비옥한 칸 A/B/C 및 메마른 칸 강조 그림을 각각 별도 리소스로 연결했다.
+- 에셋 시트의 장애물은 Idle, Hover, 체크가 붙은 완료 그림까지 3종이며 별도의 네 번째 Pressed 원화는 없다. 사용자가 지정한 체크 그림을 Pressed와 Completed용 독립 `AtlasTexture`로 각각 복제해 사용했다.
+- 완료 여부를 `removed_obstacle_indexes`, `planted_seed_indexes`에서 우선 판정하므로 완료 뒤 Hover/Exit/Down 신호가 와도 Completed 아이콘이 유지된다. 기존 핸들러에도 인덱스 중복 검사를 추가해 작업 수치가 재반영되지 않는다.
+- 저장 상태로 농사 화면을 다시 열 때 저장된 인덱스를 적용한 뒤 Completed 아이콘을 동기화한다. 비옥한 칸과 메마른 칸은 서로 다른 완료 Region을 유지한다.
+- 상태별 아이콘 크기 차이로 HBox가 움직이지 않도록 최초 Idle 상태의 계산된 버튼 최소 크기를 런타임에 고정했다. 씬의 위치, Region, 농사 계산 규칙은 변경하지 않았다.
+- 사용자가 TextureRect로 교체한 농사 단계 라벨도 기존 텍스트 라벨과 함께 안전하게 처리하도록 진행 표시와 기존 레이아웃 스모크의 타입 검사를 보강했다.
+
+### 변경 파일
+
+- `client/scripts/main.gd`: 상태 리소스 초기화, 다섯 입력 신호 연결, 완료 상태 우선 처리, 중복 방지, 저장 복원 동기화, 상태 전환 스모크 추가.
+- `client/assets/ui/farming_minigame_seed_a_completed.tres`: 비옥한 칸 A 완료 AtlasTexture.
+- `client/assets/ui/farming_minigame_seed_b_completed.tres`: 비옥한 칸 B 완료 AtlasTexture.
+- `client/assets/ui/farming_minigame_seed_c_completed.tres`: 비옥한 칸 C 완료 AtlasTexture.
+- `client/assets/ui/farming_minigame_seed_dry_completed.tres`: 메마른 칸 완료 AtlasTexture.
+
+### 검증
+
+- Godot 4.5.1 프로젝트·씬·스크립트 파싱 성공. 샌드박스의 macOS 인증서 및 편집기 설정 저장 경고 외 프로젝트 오류 0개.
+- 농사 버튼 상태 스모크 통과: Hover, Pressed, Completed 고정, 비옥/메마른 완료 이미지 구분, 중복 클릭 방지, 저장 인덱스 복원, 상태 전환 중 레이아웃 고정을 확인했다.
+- 기존 농사 레이아웃 스모크 통과: 960×540 루트, 클릭 영역, 단계 잠금, 진행률 3/3·3/3, 결과 버튼 활성 흐름을 유지했다.
+- 규칙·통합 테스트 35/35 통과. 농사 중간 복구 및 기존 농사 결과가 포함된 엔딩 규칙 시나리오를 유지했다.
+- `git diff --check` 통과.
+- 실제 Live API 호출 0회, 성공률·지연 N/A, fallback 0회.
+
+### 한계와 다음 작업
+
+- 장애물 Pressed 전용 네 번째 원화는 현재 에셋 시트에 없다. 별도 원화가 제공되면 `rock_pressed`, `weed_pressed` Region만 교체해 Completed와 시각적으로 분리할 수 있다.
+- 실제 포인터 조작의 손맛과 프레임별 시각 확인은 Godot 편집기에서 한 차례 플레이 확인하는 것이 좋다.
+
+### 2026-11-26 추가 — 화면 잘림과 씨앗 상태 크기 고정
+
+- 씨앗·장애물 이미지에 이미 이름표가 포함되어 있는데 런타임 텍스트를 다시 붙여 버튼 최소 크기가 커지던 처리를 제거했다. 접근용 이름은 `tooltip_text`로 보존했다.
+- 네 씨앗 버튼에 `expand_icon`을 적용해 Idle/Hover/Pressed/Completed AtlasTexture가 모두 기존 132×68 버튼 영역 안에서 렌더되도록 했다. 상태 전환 전후 버튼 Rect가 동일한지 스모크에서 검증한다.
+- 잘못 계산된 큰 최소 크기를 고정하던 런타임 보정은 제거했다. 농사 레이아웃은 수정 전 1205×598, 좌표 (-122.5, -29)에서 수정 후 932×524, 좌표 (14, 8)로 바뀌어 960×540 화면 안에 들어온다.
+- 후일담 ScrollContainer 내용의 앞뒤에 8px Spacer를 추가했다. VBox 간격을 포함해 첫 내용 위와 마지막 버튼 아래에 약 26px의 스크롤 안전 여백이 생긴다.
+- 후일담 스크롤 위치는 화면을 표시한 직후가 아니라 deferred 단계에서 0으로 초기화한다.
+- AtlasTexture Region, 농사 계산, 저장 인덱스 계약은 변경하지 않았다.
